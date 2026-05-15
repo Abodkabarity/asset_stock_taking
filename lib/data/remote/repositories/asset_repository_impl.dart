@@ -55,8 +55,9 @@ class AssetRepositoryImpl implements AssetRepository {
     await remoteDatasource.uploadAssets(changedItems);
 
     /// MARK AS SYNCED
+    /// MARK AS SYNCED
     for (final item in changedItems) {
-      await localDatasource.saveAsset(
+      await localDatasource.saveSyncedAsset(
         item.copyWith(isSynced: true, isDeleted: false),
       );
     }
@@ -65,46 +66,66 @@ class AssetRepositoryImpl implements AssetRepository {
   @override
   Future<String> generateAssetCode(
     String itemCode, {
-
     required String branch,
-
     required String project,
   }) async {
+    /// =========================
     /// LOCAL
+    /// =========================
     final localItems = localDatasource
         .getAssets(branch: branch, project: project)
-        .where((e) => e.itemCode == itemCode)
+        .where((e) => e.assetCode == itemCode)
         .toList();
 
+    /// =========================
     /// SERVER
-    final serverCount = await remoteDatasource.getItemCount(
-      itemCode: itemCode,
+    /// =========================
+    final serverItems = await remoteDatasource.getProjectAssets(
       branch: branch,
+      project: project,
     );
 
-    int maxSerial = 0;
+    final serverFiltered = serverItems
+        .where((e) => e.assetCode == itemCode)
+        .toList();
 
-    /// LOCAL SERIALS
+    /// =========================
+    /// USED SERIALS
+    /// =========================
+    final Set<int> usedSerials = {};
+
+    /// LOCAL
     for (final item in localItems) {
       final parts = item.itemCode.split('-');
 
-      if (parts.length >= 3) {
-        final serial = int.tryParse(parts.last) ?? 0;
+      final serial = int.tryParse(parts.last);
 
-        if (serial > maxSerial) {
-          maxSerial = serial;
-        }
+      if (serial != null) {
+        usedSerials.add(serial);
       }
     }
 
-    /// SERVER COUNT
-    if (serverCount > maxSerial) {
-      maxSerial = serverCount;
+    /// SERVER
+    for (final item in serverFiltered) {
+      final parts = item.itemCode.split('-');
+
+      final serial = int.tryParse(parts.last);
+
+      if (serial != null) {
+        usedSerials.add(serial);
+      }
     }
 
-    final next = maxSerial + 1;
+    /// =========================
+    /// FIND FIRST EMPTY NUMBER
+    /// =========================
+    int nextSerial = 1;
 
-    final serial = next.toString().padLeft(4, '0');
+    while (usedSerials.contains(nextSerial)) {
+      nextSerial++;
+    }
+
+    final serial = nextSerial.toString().padLeft(4, '0');
 
     return '$itemCode-$serial';
   }
@@ -115,8 +136,8 @@ class AssetRepositoryImpl implements AssetRepository {
   }
 
   @override
-  Future<int> getItemCount({required String itemCode, required String branch}) {
-    return remoteDatasource.getItemCount(itemCode: itemCode, branch: branch);
+  Future<int> getItemCount({required String itemCode}) {
+    return remoteDatasource.getItemCount(itemCode: itemCode);
   }
 
   @override
@@ -162,14 +183,14 @@ class AssetRepositoryImpl implements AssetRepository {
 
   @override
   Future<void> deleteLocalAsset({
-    required String assetCode,
+    required String itemCode,
 
     required String branch,
 
     required String project,
   }) {
     return localDatasource.deleteAsset(
-      assetCode: assetCode,
+      itemCode: itemCode,
 
       branch: branch,
 
@@ -211,7 +232,51 @@ class AssetRepositoryImpl implements AssetRepository {
   Future<List<AssetStockModel>> getProjectAssets({
     required String branch,
     required String project,
+  }) async {
+    /// GET ONLINE
+    final online = await remoteDatasource.getProjectAssets(
+      branch: branch,
+      project: project,
+    );
+
+    /// SAVE ONLINE LOCALLY AS SYNCED
+    /// SAVE ONLINE LOCALLY AS SYNCED
+    for (final item in online) {
+      /// CHECK IF LOCAL MODIFIED EXISTS
+      final localItems = localDatasource.getAssets(
+        branch: branch,
+        project: project,
+      );
+
+      final localModified = localItems.any(
+        (e) => e.itemCode == item.itemCode && (!e.isSynced || e.isDeleted),
+      );
+
+      /// DO NOT OVERRIDE LOCAL MODIFIED DATA
+      if (localModified) {
+        continue;
+      }
+
+      await localDatasource.saveSyncedAsset(
+        item.copyWith(isSynced: true, isDeleted: false),
+      );
+    }
+
+    /// IMPORTANT
+    /// RETURN LOCAL AFTER SAVING
+    return localDatasource.getAssets(branch: branch, project: project);
+  }
+
+  @override
+  Future<void> clearLocalProject({
+    required String branch,
+    required String project,
   }) {
-    return remoteDatasource.getProjectAssets(branch: branch, project: project);
+    return localDatasource.clear(branch: branch, project: project);
+  }
+
+  @override
+  Future<List<AssetStockModel>> getAssetsForBranch({required String branch}) {
+    return remoteDatasource.getAssetsForBranch(branch: branch);
   }
 }

@@ -14,6 +14,21 @@ class AssetCard extends StatelessWidget {
   final VoidCallback onDelete;
 
   const AssetCard({super.key, required this.item, required this.onDelete});
+  Color getClassificationColor(String classification) {
+    switch (classification.toLowerCase()) {
+      case 'public':
+        return Colors.green;
+
+      case 'restricted':
+        return Colors.lightBlue;
+
+      case 'confidential':
+        return Colors.orange;
+
+      default:
+        return Colors.grey;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,9 +56,8 @@ class AssetCard extends StatelessWidget {
       },
 
       child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.only(bottom: 20, top: 20, left: 5),
+        margin: EdgeInsets.all(4),
 
         decoration: BoxDecoration(
           color: Colors.white,
@@ -52,7 +66,7 @@ class AssetCard extends StatelessWidget {
 
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
 
               blurRadius: 14,
 
@@ -65,46 +79,103 @@ class AssetCard extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              if (item.imagePath != null)
-                InkWell(
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (_) {
-                        return Dialog(
-                          backgroundColor: Colors.black,
+              Container(
+                margin: EdgeInsets.only(left: 10),
 
-                          child: InteractiveViewer(
-                            child: Image.file(
-                              File(item.imagePath!),
-                              fit: BoxFit.contain,
+                child: Column(
+                  children: [
+                    if (item.imagePath != null || item.localImagePath != null)
+                      InkWell(
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) {
+                              return Dialog(
+                                backgroundColor: Colors.black,
+
+                                child: InteractiveViewer(
+                                  child:
+                                      (item.imagePath != null &&
+                                          item.imagePath!.startsWith('http'))
+                                      ? Image.network(
+                                          item.imagePath!,
+                                          fit: BoxFit.cover,
+                                        )
+                                      : Image.file(
+                                          File(
+                                            item.localImagePath ??
+                                                item.imagePath!,
+                                          ),
+                                          fit: BoxFit.contain,
+                                        ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryColor.withValues(
+                              alpha: 0.1,
                             ),
+
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                        );
-                      },
-                    );
-                  },
 
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
+                          child: const Icon(
+                            Icons.image,
+                            color: AppColors.primaryColor,
+                          ),
+                        ),
+                      ),
+                    SizedBox(height: 8),
+                    Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: getClassificationColor(item.classification),
 
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryColor.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
 
-                      borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: getClassificationColor(
+                              item.classification,
+                            ).withValues(alpha: 0.5),
+
+                            blurRadius: 10,
+                            spreadRadius: 2,
+                          ),
+                        ],
+
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
                     ),
-
-                    child: const Icon(
-                      Icons.image,
-                      color: AppColors.primaryColor,
-                    ),
-                  ),
+                  ],
                 ),
+              ),
               SizedBox(width: 10),
+              SizedBox(width: 15),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
 
                 children: [
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        const TextSpan(text: 'Item Name: '),
+
+                        TextSpan(
+                          text: item.name,
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+
                   Text.rich(
                     TextSpan(
                       children: [
@@ -114,31 +185,42 @@ class AssetCard extends StatelessWidget {
                           text: item.itemCode,
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
-
-                        TextSpan(
-                          text: '  ${item.name}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 6),
 
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        const TextSpan(text: 'Status: '),
-
+                  Row(
+                    children: [
+                      Text.rich(
                         TextSpan(
-                          text: item.status,
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          children: [
+                            const TextSpan(text: 'Status: '),
+                            TextSpan(
+                              text: item.status,
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      SizedBox(width: 60),
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            const TextSpan(text: 'Cost: '),
+
+                            TextSpan(
+                              text: item.cost.toString(),
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 6),
 
                   Text.rich(
                     TextSpan(

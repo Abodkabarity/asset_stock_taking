@@ -16,7 +16,7 @@ class LocalAssetDatasource {
         .toList();
 
     /// REMOVE SAME ASSET CODE
-    current.removeWhere((e) => e['asset_code'] == model.assetCode);
+    current.removeWhere((e) => e['item_code'] == model.itemCode);
 
     /// ADD NEW
     current.add(model.copyWith(isSynced: false, isDeleted: false).toJson());
@@ -71,7 +71,18 @@ class LocalAssetDatasource {
             isSynced: item['is_synced'] ?? false,
 
             isDeleted: item['is_deleted'] ?? false,
+
+            /// IMPORTANT
             imagePath: item['image_path'],
+
+            /// IMPORTANT
+            localImagePath: item['local_image_path'],
+
+            createdAt:
+                DateTime.tryParse(item['created_at']?.toString() ?? '') ??
+                DateTime.now(),
+
+            cost: (item['cost'] ?? 0).toDouble(),
           );
         })
         .toList();
@@ -96,7 +107,7 @@ class LocalAssetDatasource {
   /// DELETE ASSET
   /// =========================
   Future<void> deleteAsset({
-    required String assetCode,
+    required String itemCode,
     required String branch,
     required String project,
   }) async {
@@ -106,50 +117,13 @@ class LocalAssetDatasource {
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
-    /// FIND ITEM
-    final deleted = assets.firstWhere((e) => e['asset_code'] == assetCode);
+    assets.removeWhere(
+      (e) =>
+          e['item_code'] == itemCode &&
+          e['location'] == branch &&
+          e['project_name'] == project,
+    );
 
-    final itemCode = deleted['item_code'];
-
-    /// REMOVE DELETED ITEM
-    assets.removeWhere((e) => e['asset_code'] == assetCode);
-
-    /// SAME ITEMS
-    final sameItems = assets.where((e) {
-      return e['location'] == branch &&
-          e['project_name'] == project &&
-          e['item_code'] == itemCode;
-    }).toList();
-
-    /// SORT
-    sameItems.sort((a, b) {
-      return a['asset_code'].toString().compareTo(b['asset_code'].toString());
-    });
-
-    /// REMOVE OLD SAME ITEMS
-    assets.removeWhere((e) {
-      return e['location'] == branch &&
-          e['project_name'] == project &&
-          e['item_code'] == itemCode;
-    });
-
-    /// REGENERATE SERIALS
-    for (int i = 0; i < sameItems.length; i++) {
-      final serial = (i + 1).toString().padLeft(2, '0');
-
-      final newCode = '$itemCode-$serial';
-
-      sameItems[i]['asset_code'] = newCode;
-
-      sameItems[i]['is_synced'] = false;
-
-      sameItems[i]['is_deleted'] = false;
-    }
-
-    /// ADD AGAIN
-    assets.addAll(sameItems);
-
-    /// SAVE
     await box.put('assets', assets);
   }
 
@@ -175,6 +149,25 @@ class LocalAssetDatasource {
         current[i]['is_deleted'] = false;
       }
     }
+
+    await box.put('assets', current);
+  }
+
+  /// =========================
+  /// SAVE SYNCED SERVER DATA
+  /// =========================
+  Future<void> saveSyncedAsset(AssetStockModel model) async {
+    final data = box.get('assets', defaultValue: []);
+
+    final List<Map<String, dynamic>> current = (data as List)
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    /// REMOVE SAME ITEM
+    current.removeWhere((e) => e['item_code'] == model.itemCode);
+
+    /// ADD AS SYNCED
+    current.add(model.copyWith(isSynced: true, isDeleted: false).toJson());
 
     await box.put('assets', current);
   }

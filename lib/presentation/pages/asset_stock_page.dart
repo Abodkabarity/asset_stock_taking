@@ -5,8 +5,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/services/asset_excel_service.dart';
 import '../../core/services/barcode_print_service.dart';
 import '../../data/models/asset_item_model.dart';
 import '../../data/models/asset_stock_model.dart';
@@ -38,7 +40,7 @@ class _AssetStockPageState extends State<AssetStockPage> {
   final modelController = TextEditingController();
 
   final serialController = TextEditingController();
-
+  final costController = TextEditingController();
   final qtyController = TextEditingController();
 
   AssetItemModel? selectedItem;
@@ -54,7 +56,7 @@ class _AssetStockPageState extends State<AssetStockPage> {
     brandController.dispose();
     searchController.dispose();
     modelController.dispose();
-
+    costController.dispose();
     serialController.dispose();
 
     qtyController.dispose();
@@ -88,21 +90,25 @@ class _AssetStockPageState extends State<AssetStockPage> {
 
     for (int i = 0; i < qty; i++) {
       /// GENERATE CODE
-      final assetCode = await bloc.repository.generateAssetCode(
+      final generatedCode = await bloc.repository.generateAssetCode(
         selectedItem!.itemCode,
 
         branch: widget.branch,
 
         project: widget.project,
       );
+      final cost =
+          double.tryParse(costController.text.replaceAll(',', '')) ?? 0;
 
       /// CREATE MODEL
       final asset = AssetStockModel(
         name: selectedItem!.name,
 
-        assetCode: assetCode,
+        /// MASTER CODE
+        assetCode: selectedItem!.itemCode,
 
-        itemCode: selectedItem!.itemCode,
+        /// GENERATED UNIQUE CODE
+        itemCode: generatedCode,
 
         category: selectedItem!.category,
 
@@ -121,22 +127,56 @@ class _AssetStockPageState extends State<AssetStockPage> {
         model: modelController.text,
 
         serialNo: serialController.text,
-        imagePath: selectedImage?.path,
+
+        imagePath: null,
+        localImagePath: selectedImage?.path,
+        createdAt: DateTime.now(),
+        isSynced: false,
+        cost: cost,
+        isDeleted: false,
       );
 
-      /// SAVE
+      /// SAVE LOCAL
       await bloc.repository.saveLocalAsset(asset);
     }
 
-    /// RELOAD LOCAL DATA
-    final local = bloc.repository.getLocalAssets(
+    /// RELOAD ONLINE
+    final online = await bloc.repository.getProjectAssets(
       branch: widget.branch,
-
       project: widget.project,
     );
 
+    /// RELOAD LOCAL
+    final local = bloc.repository.getLocalAssets(
+      branch: widget.branch,
+      project: widget.project,
+    );
+
+    /// =========================
+    /// MERGE
+    /// =========================
+    final Map<String, AssetStockModel> mergedMap = {};
+
+    /// ONLINE
+    for (final item in online) {
+      mergedMap[item.itemCode] = item;
+    }
+
+    /// LOCAL REPLACE ONLINE
+    for (final item in local) {
+      mergedMap[item.itemCode] = item;
+    }
+
+    final merged = mergedMap.values.toList();
+
+    /// REMOVE DELETED
+    merged.removeWhere((e) => e.isDeleted);
+
+    /// SORT NEWEST FIRST
+    merged.sort((a, b) => b.itemCode.compareTo(a.itemCode));
+
     /// STOP LOADING
-    bloc.emit(bloc.state.copyWith(localAssets: local, saving: false));
+    bloc.emit(bloc.state.copyWith(localAssets: merged, saving: false));
 
     /// CLEAR
     assetCodeController.clear();
@@ -150,11 +190,13 @@ class _AssetStockPageState extends State<AssetStockPage> {
     serialController.clear();
 
     qtyController.clear();
-
+    costController.clear();
     selectedItem = null;
 
     selectedStatus = null;
+
     selectedImage = null;
+
     setState(() {});
   }
 
@@ -186,36 +228,117 @@ class _AssetStockPageState extends State<AssetStockPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          '${widget.branch} - ${widget.project}',
+          widget.project,
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         backgroundColor: AppColors.primaryColor,
         actions: [
           IconButton(
             onPressed: () async {
-              final classifications = context
+              final assets = await context
                   .read<AssetBloc>()
-                  .state
-                  .localAssets
+                  .repository
+                  .getProjectAssets(
+                    branch: widget.branch,
+                    project: widget.project,
+                  );
+
+              if (assets.isEmpty) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('No Data Found')));
+
+                return;
+              }
+
+              await AssetExcelService.exportAssets(
+                assets: assets,
+                fileName: '${widget.branch}_${widget.project}_assets',
+              );
+            },
+
+            icon: const Icon(Icons.file_download),
+          ),
+          IconButton(
+            onPressed: () async {
+              final supabase = Supabase.instance.client;
+
+              /// =========================
+              /// SERVER ONLY
+              /// =========================
+              final response = await supabase
+                  .from('asset_stock_taking')
+                  .select()
+                  .eq('location', widget.branch)
+                  .eq('project_name', widget.project);
+
+              /// CONVERT
+              final onlineAssets = response
+                  .map<AssetStockModel>((e) => AssetStockModel.fromJson(e))
+                  .toList();
+
+              /// CLASSIFICATIONS
+              final classifications = onlineAssets
                   .map((e) => e.classification)
                   .toSet()
                   .toList();
 
+              if (classifications.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('No Uploaded Assets Found')),
+                );
+
+                return;
+              }
+
               String? selectedClassification;
 
+              /// =========================
+              /// DIALOG
+              /// =========================
               final result = await showDialog<String>(
                 context: context,
                 builder: (_) {
                   return AlertDialog(
+                    backgroundColor: Colors.white,
                     title: const Text('Select Classification'),
 
                     content: DropdownButtonFormField<String>(
+                      initialValue: selectedClassification,
+
+                      decoration: InputDecoration(
+                        labelText: 'Classification',
+
+                        filled: true,
+                        fillColor: AppColors.backgroundWidget,
+
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: AppColors.primaryColor),
+                        ),
+
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: AppColors.primaryColor),
+                        ),
+
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: AppColors.primaryColor),
+                        ),
+                      ),
+
                       items: classifications.map((e) {
-                        return DropdownMenuItem(value: e, child: Text(e));
+                        return DropdownMenuItem<String>(
+                          value: e,
+                          child: Text(e),
+                        );
                       }).toList(),
 
-                      onChanged: (v) {
-                        selectedClassification = v;
+                      onChanged: (value) {
+                        if (value == null) return;
+
+                        selectedClassification = value;
                       },
                     ),
 
@@ -224,14 +347,23 @@ class _AssetStockPageState extends State<AssetStockPage> {
                         onPressed: () {
                           Navigator.pop(context);
                         },
-                        child: const Text('Cancel'),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(color: AppColors.secondaryColor),
+                        ),
                       ),
 
                       ElevatedButton(
                         onPressed: () {
                           Navigator.pop(context, selectedClassification);
                         },
-                        child: const Text('Print'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryColor,
+                        ),
+                        child: const Text(
+                          'Print',
+                          style: TextStyle(color: Colors.white),
+                        ),
                       ),
                     ],
                   );
@@ -242,20 +374,12 @@ class _AssetStockPageState extends State<AssetStockPage> {
                 return;
               }
 
-              final assets = await context
-                  .read<AssetBloc>()
-                  .repository
-                  .getProjectAssets(
-                    branch: widget.branch,
-                    project: widget.project,
-                  );
-
-              final filtered = assets
-                  .where(
-                    (e) =>
-                        e.classification.toLowerCase() == result.toLowerCase(),
-                  )
-                  .toList();
+              /// =========================
+              /// FILTER ONLINE ONLY
+              /// =========================
+              final filtered = onlineAssets.where((e) {
+                return e.classification.toLowerCase() == result.toLowerCase();
+              }).toList();
 
               if (filtered.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -265,10 +389,16 @@ class _AssetStockPageState extends State<AssetStockPage> {
                 return;
               }
 
+              /// =========================
+              /// GENERATE PDF
+              /// =========================
               final pdf = await BarcodePrintService.generateBarcodePdf(
                 assets: filtered,
               );
 
+              /// =========================
+              /// PRINT
+              /// =========================
               await Printing.layoutPdf(onLayout: (_) async => pdf);
             },
 
@@ -298,7 +428,7 @@ class _AssetStockPageState extends State<AssetStockPage> {
                     : Badge(
                         label: Text(
                           state.localAssets
-                              .where((e) => !e.isSynced)
+                              .where((e) => !e.isSynced || e.isDeleted)
                               .length
                               .toString(),
                         ),
@@ -494,26 +624,32 @@ class _AssetStockPageState extends State<AssetStockPage> {
                     children: [
                       Expanded(
                         child: TextField(
-                          controller: assetCodeController,
+                          controller: costController,
 
-                          readOnly: true,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
 
                           decoration: InputDecoration(
-                            labelText: 'Asset Code',
+                            labelText: 'Cost',
+
                             fillColor: AppColors.backgroundWidget,
                             filled: true,
+
                             border: OutlineInputBorder(
                               borderSide: BorderSide(
                                 color: AppColors.primaryColor,
                               ),
                               borderRadius: BorderRadius.circular(14),
                             ),
+
                             enabledBorder: OutlineInputBorder(
                               borderSide: BorderSide(
                                 color: AppColors.primaryColor,
                               ),
                               borderRadius: BorderRadius.circular(14),
                             ),
+
                             focusedBorder: OutlineInputBorder(
                               borderSide: BorderSide(
                                 color: AppColors.primaryColor,

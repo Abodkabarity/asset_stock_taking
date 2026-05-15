@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:printing/printing.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/services/asset_excel_service.dart';
 import '../../core/services/barcode_print_service.dart';
 import '../../domain/repositories/asset_repository.dart';
 import '../../injection_container.dart';
@@ -158,6 +159,28 @@ class _SelectProjectPageState extends State<SelectProjectPage> {
 
         actions: [
           IconButton(
+            onPressed: () async {
+              final assets = await sl.get<AssetRepository>().getAssetsForBranch(
+                branch: widget.branch,
+              );
+
+              if (assets.isEmpty) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('No Data Found')));
+
+                return;
+              }
+
+              await AssetExcelService.exportAssets(
+                assets: assets,
+                fileName: '${widget.branch}_all_assets',
+              );
+            },
+
+            icon: const Icon(Icons.file_download),
+          ),
+          IconButton(
             icon: const Icon(Icons.print, color: Colors.white),
 
             onPressed: () async {
@@ -176,15 +199,44 @@ class _SelectProjectPageState extends State<SelectProjectPage> {
 
                 builder: (_) {
                   return AlertDialog(
+                    backgroundColor: Colors.white,
                     title: const Text('Select Classification'),
 
                     content: DropdownButtonFormField<String>(
+                      initialValue: selectedClassification,
+
+                      decoration: InputDecoration(
+                        labelText: 'Classification',
+
+                        filled: true,
+                        fillColor: AppColors.backgroundWidget,
+
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: AppColors.primaryColor),
+                        ),
+
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: AppColors.primaryColor),
+                        ),
+
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: AppColors.primaryColor),
+                        ),
+                      ),
+
                       items: classifications.map((e) {
                         return DropdownMenuItem(value: e, child: Text(e));
                       }).toList(),
 
-                      onChanged: (v) {
-                        selectedClassification = v;
+                      onChanged: (value) {
+                        if (value == null) return;
+
+                        setState(() {
+                          selectedClassification = value;
+                        });
                       },
                     ),
 
@@ -194,15 +246,23 @@ class _SelectProjectPageState extends State<SelectProjectPage> {
                           Navigator.pop(context);
                         },
 
-                        child: const Text('Cancel'),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(color: AppColors.secondaryColor),
+                        ),
                       ),
 
                       ElevatedButton(
                         onPressed: () {
                           Navigator.pop(context, selectedClassification);
                         },
-
-                        child: const Text('Print'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryColor,
+                        ),
+                        child: const Text(
+                          'Print',
+                          style: TextStyle(color: Colors.white),
+                        ),
                       ),
                     ],
                   );
@@ -344,13 +404,20 @@ class _SelectProjectPageState extends State<SelectProjectPage> {
                             return;
                           }
 
+                          /// DELETE PROJECT FROM SERVER
                           await sl.get<AssetRepository>().deleteProject(
                             branch: widget.branch,
-
                             project: project,
                           );
 
-                          _loadProjects();
+                          /// DELETE LOCAL PROJECT DATA
+                          await sl.get<AssetRepository>().clearLocalProject(
+                            branch: widget.branch,
+                            project: project,
+                          );
+
+                          /// RELOAD
+                          await _loadProjects();
                         },
                       ),
 

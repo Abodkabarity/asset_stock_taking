@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:printing/printing.dart';
 
+import '../../core/constants/app_colors.dart';
 import '../../core/services/barcode_print_service.dart';
 import '../../data/models/asset_item_model.dart';
 import '../../data/models/asset_stock_model.dart';
@@ -31,7 +32,7 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
   late TextEditingController brandController;
 
   late TextEditingController modelController;
-
+  late TextEditingController costController;
   late TextEditingController serialController;
 
   late String selectedStatus;
@@ -49,7 +50,7 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
     modelController = TextEditingController(text: widget.asset.model);
 
     serialController = TextEditingController(text: widget.asset.serialNo);
-
+    costController = TextEditingController(text: widget.asset.cost.toString());
     selectedStatus = widget.asset.status;
 
     final items = context.read<AssetBloc>().state.items;
@@ -65,9 +66,8 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final masterItems = context.read<AssetBloc>().state.items;
-
     return Dialog(
+      backgroundColor: Colors.white,
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
 
@@ -81,7 +81,7 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                   child: Column(
                     children: [
                       Text(
-                        widget.asset.itemCode,
+                        widget.asset.name,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
@@ -91,7 +91,7 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                       const SizedBox(height: 4),
 
                       Text(
-                        widget.asset.assetCode,
+                        widget.asset.itemCode,
                         style: const TextStyle(color: Colors.grey),
                       ),
                     ],
@@ -111,7 +111,22 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                         builder: (_) {
                           return Dialog(
                             child: InteractiveViewer(
-                              child: Image.file(File(widget.asset.imagePath!)),
+                              child:
+                                  (widget.asset.imagePath != null &&
+                                      widget.asset.imagePath!.startsWith(
+                                        'http',
+                                      ))
+                                  ? Image.network(
+                                      widget.asset.imagePath!,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Image.file(
+                                      File(
+                                        widget.asset.localImagePath ??
+                                            widget.asset.imagePath!,
+                                      ),
+                                      fit: BoxFit.contain,
+                                    ),
                             ),
                           );
                         },
@@ -124,25 +139,29 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
             const SizedBox(height: 20),
 
             /// NAME DROPDOWN
-            DropdownButtonFormField<AssetItemModel>(
-              value: selectedItem,
+            /// NAME READ ONLY
+            TextField(
+              controller: TextEditingController(text: selectedItem.name),
 
-              decoration: const InputDecoration(
+              readOnly: true,
+
+              decoration: InputDecoration(
                 labelText: 'Name',
-                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: AppColors.backgroundWidget,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
               ),
-
-              items: masterItems.map((e) {
-                return DropdownMenuItem(value: e, child: Text(e.name));
-              }).toList(),
-
-              onChanged: (value) {
-                if (value == null) return;
-
-                setState(() {
-                  selectedItem = value;
-                });
-              },
             ),
 
             const SizedBox(height: 12),
@@ -150,9 +169,22 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
             TextField(
               controller: brandController,
 
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Brand',
-                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: AppColors.backgroundWidget,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
               ),
             ),
 
@@ -161,9 +193,22 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
             TextField(
               controller: modelController,
 
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Model',
-                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: AppColors.backgroundWidget,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
               ),
             ),
 
@@ -172,21 +217,82 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
             TextField(
               controller: serialController,
 
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Serial No',
-                border: OutlineInputBorder(),
+                filled: true,
+                fillColor: AppColors.backgroundWidget,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
               ),
             ),
 
             const SizedBox(height: 12),
 
+            TextField(
+              controller: costController,
+
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+
+              decoration: InputDecoration(
+                labelText: 'Cost',
+
+                filled: true,
+                fillColor: AppColors.backgroundWidget,
+
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
             /// STATUS DROPDOWN
             DropdownButtonFormField<String>(
-              value: selectedStatus,
+              initialValue: selectedStatus,
 
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Status',
-                border: OutlineInputBorder(),
+
+                filled: true,
+                fillColor: AppColors.backgroundWidget,
+
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
               ),
 
               items: statuses.map((e) {
@@ -225,7 +331,10 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                       Navigator.pop(context);
                     },
 
-                    child: const Text('Delete'),
+                    child: const Text(
+                      'Delete',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
                 ),
 
@@ -241,8 +350,13 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
                       await Printing.layoutPdf(onLayout: (_) async => pdf);
                     },
-
-                    child: const Text('Print'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.secondaryColor,
+                    ),
+                    child: const Text(
+                      'Print',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
                 ),
               ],
@@ -251,52 +365,79 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
             const SizedBox(height: 12),
 
             /// SAVE
-            SizedBox(
-              width: double.infinity,
-
-              child: ElevatedButton(
-                onPressed: () {
-                  final updated = AssetStockModel(
-                    name: selectedItem.name,
-
-                    assetCode: widget.asset.assetCode,
-
-                    itemCode: widget.asset.itemCode,
-
-                    category: selectedItem.category,
-
-                    subCategory: selectedItem.subCategory,
-
-                    classification: selectedItem.classification,
-
-                    location: widget.asset.location,
-
-                    projectName: widget.asset.projectName,
-
-                    status: selectedStatus,
-
-                    brand: brandController.text,
-
-                    model: modelController.text,
-
-                    serialNo: serialController.text,
-
-                    imagePath: widget.asset.imagePath,
-                  );
-
-                  context.read<AssetBloc>().add(
-                    SaveAssetEvent(
-                      updated,
-                      branch: widget.branch,
-                      project: widget.project,
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      "Cancel",
+                      style: TextStyle(color: AppColors.secondaryColor),
                     ),
-                  );
+                  ),
+                ),
+                Expanded(
+                  child: SizedBox(
+                    width: double.infinity,
 
-                  Navigator.pop(context);
-                },
+                    child: ElevatedButton(
+                      onPressed: () {
+                        final cost =
+                            double.tryParse(
+                              costController.text.replaceAll(',', ''),
+                            ) ??
+                            0;
+                        final updated = AssetStockModel(
+                          name: selectedItem.name,
 
-                child: const Text('Save'),
-              ),
+                          assetCode: widget.asset.assetCode,
+
+                          itemCode: widget.asset.itemCode,
+
+                          category: selectedItem.category,
+
+                          subCategory: selectedItem.subCategory,
+
+                          classification: selectedItem.classification,
+
+                          location: widget.asset.location,
+
+                          projectName: widget.asset.projectName,
+
+                          status: selectedStatus,
+
+                          brand: brandController.text,
+
+                          model: modelController.text,
+
+                          serialNo: serialController.text,
+                          cost: cost,
+                          imagePath: widget.asset.imagePath,
+                          createdAt: DateTime.now(),
+                          isSynced: false,
+                        );
+
+                        context.read<AssetBloc>().add(
+                          SaveAssetEvent(
+                            updated,
+                            branch: widget.branch,
+                            project: widget.project,
+                          ),
+                        );
+
+                        Navigator.pop(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryColor,
+                      ),
+                      child: const Text(
+                        'Save',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

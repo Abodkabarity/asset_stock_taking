@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/asset_item_model.dart';
@@ -19,7 +21,9 @@ class AssetRemoteDatasource {
       return;
     }
 
+    /// =========================
     /// DELETE ITEMS
+    /// =========================
     final deletedItems = items.where((e) => e.isDeleted).toList();
 
     for (final item in deletedItems) {
@@ -29,44 +33,90 @@ class AssetRemoteDatasource {
           .eq('item_code', item.itemCode);
     }
 
-    /// UPSERT ITEMS
-    final uploadItems = items
-        .where((e) => !e.isDeleted)
-        .map(
-          (e) => {
-            'asset_code': e.assetCode,
-            'name': e.name,
-            'item_code': e.itemCode,
-            'category': e.category,
-            'sub_category': e.subCategory,
-            'classification': e.classification,
-            'location': e.location,
-            'project_name': e.projectName,
-            'status': e.status,
-            'brand': e.brand,
-            'model': e.model,
-            'serial_no': e.serialNo,
-            'image_path': e.imagePath,
-          },
-        )
-        .toList();
+    /// =========================
+    /// BUILD UPLOAD LIST
+    /// =========================
+    final List<Map<String, dynamic>> uploadItems = [];
 
+    for (final e in items.where((e) => !e.isDeleted)) {
+      String? imageUrl = e.imagePath;
+
+      /// =========================
+      /// UPLOAD LOCAL IMAGE
+      /// =========================
+      if (e.localImagePath != null &&
+          e.localImagePath!.isNotEmpty &&
+          !e.localImagePath!.startsWith('http')) {
+        try {
+          final file = File(e.localImagePath!);
+
+          if (file.existsSync()) {
+            final fileName =
+                '${DateTime.now().millisecondsSinceEpoch}_${e.itemCode}.jpg';
+
+            final storagePath = 'assets/$fileName';
+
+            /// UPLOAD TO STORAGE
+            await supabase.storage
+                .from('asset-images')
+                .upload(
+                  storagePath,
+                  file,
+                  fileOptions: const FileOptions(upsert: true),
+                );
+
+            /// GET PUBLIC URL
+            imageUrl = supabase.storage
+                .from('asset-images')
+                .getPublicUrl(storagePath);
+
+            print('IMAGE UPLOADED: $imageUrl');
+          }
+        } catch (err) {
+          print('IMAGE UPLOAD ERROR');
+          print(err);
+        }
+      }
+
+      /// =========================
+      /// ADD TO UPSERT LIST
+      /// =========================
+      uploadItems.add({
+        'asset_code': e.assetCode,
+        'name': e.name,
+        'item_code': e.itemCode,
+        'category': e.category,
+        'sub_category': e.subCategory,
+        'classification': e.classification,
+        'location': e.location,
+        'project_name': e.projectName,
+        'status': e.status,
+        'brand': e.brand,
+        'model': e.model,
+        'serial_no': e.serialNo,
+        'image_path': imageUrl,
+        'cost': e.cost,
+        'created_at': e.createdAt.toIso8601String(),
+      });
+    }
+
+    /// =========================
+    /// UPSERT
+    /// =========================
     if (uploadItems.isNotEmpty) {
       await supabase
           .from('asset_stock_taking')
-          .upsert(uploadItems, onConflict: 'asset_code');
+          .upsert(uploadItems, onConflict: 'item_code');
+
+      print('UPLOAD SUCCESS');
     }
   }
 
-  Future<int> getItemCount({
-    required String itemCode,
-    required String branch,
-  }) async {
+  Future<int> getItemCount({required String itemCode}) async {
     final response = await supabase
         .from('asset_stock_taking')
-        .select('asset_code')
-        .eq('location', branch)
-        .like('asset_code', '$itemCode-%');
+        .select('item_code')
+        .like('item_code', '$itemCode-%');
 
     return response.length;
   }
@@ -171,5 +221,53 @@ class AssetRemoteDatasource {
     return response
         .map<AssetStockModel>((e) => AssetStockModel.fromJson(e))
         .toList();
+  }
+
+  Future<List<AssetStockModel>> getAssetsForBranch({
+    required String branch,
+  }) async {
+    final response = await supabase
+        .from('asset_stock_taking')
+        .select()
+        .eq('location', branch)
+        .order('created_at', ascending: false);
+
+    return response
+        .map<AssetStockModel>((e) => AssetStockModel.fromJson(e))
+        .toList();
+  }
+
+  Future<String?> uploadImage({
+    required String itemCode,
+    required String? localPath,
+  }) async {
+    try {
+      if (localPath == null || localPath.isEmpty) {
+        return null;
+      }
+
+      final file = File(localPath);
+
+      if (!file.existsSync()) {
+        return null;
+      }
+
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_$itemCode.jpg';
+
+      final path = 'assets/$fileName';
+
+      await supabase.storage
+          .from('asset-images')
+          .upload(path, file, fileOptions: const FileOptions(upsert: true));
+
+      final publicUrl = supabase.storage
+          .from('asset-images')
+          .getPublicUrl(path);
+
+      return publicUrl;
+    } catch (e) {
+      print(e);
+      return null;
+    }
   }
 }

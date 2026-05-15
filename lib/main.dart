@@ -14,7 +14,6 @@ void main() async {
   await Hive.initFlutter();
 
   await Hive.openBox('asset_box');
-
   await Hive.openBox('master_box');
 
   await Hive.openBox('settings_box');
@@ -23,7 +22,6 @@ void main() async {
     url: SupabaseConstants.supabaseUrl,
     anonKey: SupabaseConstants.supabaseKey,
   );
-
   setup();
 
   runApp(const MyApp());

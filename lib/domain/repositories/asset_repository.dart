@@ -21,7 +21,7 @@ abstract class AssetRepository {
 
   Future<List<String>> getBranches();
 
-  Future<int> getItemCount({required String itemCode, required String branch});
+  Future<int> getItemCount({required String itemCode});
   Future<List<String>> getProjects(String branch);
 
   Future<void> addProject({required String branch, required String project});
@@ -29,7 +29,7 @@ abstract class AssetRepository {
   Future<void> deleteProject({required String branch, required String project});
   Future<List<AssetItemModel>> syncMaster();
   Future<void> deleteLocalAsset({
-    required String assetCode,
+    required String itemCode,
 
     required String branch,
 
@@ -49,4 +49,9 @@ abstract class AssetRepository {
     required String branch,
     required String project,
   });
+  Future<void> clearLocalProject({
+    required String branch,
+    required String project,
+  });
+  Future<List<AssetStockModel>> getAssetsForBranch({required String branch});
 }
