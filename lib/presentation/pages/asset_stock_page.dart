@@ -47,7 +47,7 @@ class _AssetStockPageState extends State<AssetStockPage> {
   File? selectedImage;
   String? selectedStatus;
 
-  final statuses = ['Excellent', 'Good', 'Bad'];
+  final statuses = ['New', 'Good', 'Bad'];
 
   @override
   void dispose() {
@@ -168,9 +168,6 @@ class _AssetStockPageState extends State<AssetStockPage> {
     }
 
     final merged = mergedMap.values.toList();
-
-    /// REMOVE DELETED
-    merged.removeWhere((e) => e.isDeleted);
 
     /// SORT NEWEST FIRST
     merged.sort((a, b) => b.itemCode.compareTo(a.itemCode));
@@ -408,7 +405,14 @@ class _AssetStockPageState extends State<AssetStockPage> {
             builder: (context, state) {
               return IconButton(
                 onPressed:
-                    state.localAssets.where((e) => !e.isSynced).isEmpty ||
+                    context
+                            .read<AssetBloc>()
+                            .repository
+                            .getPendingUploads(
+                              branch: widget.branch,
+                              project: widget.project,
+                            )
+                            .isEmpty ||
                         state.loading
                     ? null
                     : () {
@@ -427,8 +431,13 @@ class _AssetStockPageState extends State<AssetStockPage> {
                       )
                     : Badge(
                         label: Text(
-                          state.localAssets
-                              .where((e) => !e.isSynced || e.isDeleted)
+                          context
+                              .read<AssetBloc>()
+                              .repository
+                              .getPendingUploads(
+                                branch: widget.branch,
+                                project: widget.project,
+                              )
                               .length
                               .toString(),
                         ),
@@ -450,6 +459,9 @@ class _AssetStockPageState extends State<AssetStockPage> {
         ),
         child: BlocBuilder<AssetBloc, AssetState>(
           builder: (context, state) {
+            final visibleAssets = state.localAssets
+                .where((e) => !e.isDeleted)
+                .toList();
             return Padding(
               padding: const EdgeInsets.all(16),
 
@@ -937,14 +949,12 @@ class _AssetStockPageState extends State<AssetStockPage> {
 
                   /// LOCAL LIST
                   Expanded(
-                    child: state.localAssets.isEmpty
+                    child: visibleAssets.isEmpty
                         ? const Center(child: Text('No Local Assets'))
                         : ListView.builder(
-                            itemCount: state.localAssets.length,
-
+                            itemCount: visibleAssets.length,
                             itemBuilder: (_, index) {
-                              final item = state.localAssets[index];
-
+                              final item = visibleAssets[index];
                               return AssetCard(
                                 item: item,
 

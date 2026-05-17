@@ -54,4 +54,13 @@ abstract class AssetRepository {
     required String project,
   });
   Future<List<AssetStockModel>> getAssetsForBranch({required String branch});
+  Future<void> resequenceLocalAssets({
+    required String assetCode,
+    required String branch,
+    required String project,
+  });
+  List<AssetStockModel> getPendingUploads({
+    required String branch,
+    required String project,
+  });
 }

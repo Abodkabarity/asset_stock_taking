@@ -57,6 +57,30 @@ class AssetRepositoryImpl implements AssetRepository {
     /// MARK AS SYNCED
     /// MARK AS SYNCED
     for (final item in changedItems) {
+      /// DELETED ITEM
+      if (item.isDeleted) {
+        final localItems = localDatasource.getAssets(
+          branch: item.location,
+          project: item.projectName,
+        );
+
+        final deletedLocal = localItems.firstWhere(
+          (e) =>
+              e.assetCode == item.assetCode &&
+              e.createdAt == item.createdAt &&
+              e.isDeleted,
+        );
+
+        await localDatasource.deleteAsset(
+          itemCode: deletedLocal.itemCode,
+          branch: item.location,
+          project: item.projectName,
+        );
+
+        continue;
+      }
+
+      /// NORMAL ITEM
       await localDatasource.saveSyncedAsset(
         item.copyWith(isSynced: true, isDeleted: false),
       );
@@ -249,7 +273,10 @@ class AssetRepositoryImpl implements AssetRepository {
       );
 
       final localModified = localItems.any(
-        (e) => e.itemCode == item.itemCode && (!e.isSynced || e.isDeleted),
+        (e) =>
+            e.assetCode == item.assetCode &&
+            e.createdAt == item.createdAt &&
+            (!e.isSynced || e.isDeleted),
       );
 
       /// DO NOT OVERRIDE LOCAL MODIFIED DATA
@@ -278,5 +305,26 @@ class AssetRepositoryImpl implements AssetRepository {
   @override
   Future<List<AssetStockModel>> getAssetsForBranch({required String branch}) {
     return remoteDatasource.getAssetsForBranch(branch: branch);
+  }
+
+  @override
+  Future<void> resequenceLocalAssets({
+    required String assetCode,
+    required String branch,
+    required String project,
+  }) async {
+    await localDatasource.resequenceLocalAssets(
+      assetCode: assetCode,
+      branch: branch,
+      project: project,
+    );
+  }
+
+  @override
+  List<AssetStockModel> getPendingUploads({
+    required String branch,
+    required String project,
+  }) {
+    return localDatasource.getPendingUploads(branch: branch, project: project);
   }
 }

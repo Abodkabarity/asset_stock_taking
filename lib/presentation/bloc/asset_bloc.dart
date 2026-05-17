@@ -1,6 +1,5 @@
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/models/asset_item_model.dart';
 import '../../data/models/asset_stock_model.dart';
@@ -32,47 +31,74 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
   }) {
     final Map<String, AssetStockModel> mergedMap = {};
 
-    /// =========================================================
-    /// FIRST ADD ONLINE
-    /// =========================================================
+    /// =========================
+    /// ONLINE FIRST
+    /// =========================
     for (final item in online) {
-      mergedMap[item.itemCode] = item;
+      final key = '${item.assetCode}_${item.createdAt.toIso8601String()}';
+
+      mergedMap[key] = item;
     }
 
-    /// =========================================================
-    /// LOCAL OVERRIDES ONLINE ONLY IF:
-    /// - NOT SYNCED
-    /// - DELETED
-    /// =========================================================
+    /// =========================
+    /// LOCAL OVERRIDE
+    /// =========================
     for (final item in local) {
-      final existing = mergedMap[item.itemCode];
+      final key = '${item.assetCode}_${item.createdAt.toIso8601String()}';
 
-      /// LOCAL NEW ITEM
+      final existing = mergedMap[key];
+
+      /// NEW LOCAL
       if (existing == null) {
-        mergedMap[item.itemCode] = item;
-
+        mergedMap[key] = item;
         continue;
       }
 
       /// LOCAL MODIFIED
       if (!item.isSynced || item.isDeleted) {
-        mergedMap[item.itemCode] = item;
+        mergedMap[key] = item;
       }
     }
 
     final merged = mergedMap.values.toList();
 
-    /// =========================================================
-    /// REMOVE DELETED
-    /// =========================================================
-    merged.removeWhere((e) => e.isDeleted);
+    /// =========================
+    /// ACTIVE ONLY
+    /// =========================
 
-    /// =========================================================
-    /// SORT NEWEST FIRST
-    /// =========================================================
-    merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    /// =========================
+    /// GROUP BY ASSET CODE
+    /// =========================
+    final Map<String, List<AssetStockModel>> grouped = {};
 
-    return merged;
+    for (final item in merged) {
+      grouped.putIfAbsent(item.assetCode, () => []);
+
+      grouped[item.assetCode]!.add(item);
+    }
+
+    /// =========================
+    /// UI RESEQUENCE
+    /// =========================
+    final List<AssetStockModel> resequenced = [];
+
+    for (final entry in grouped.entries) {
+      final assetCode = entry.key;
+
+      final items = entry.value.where((e) => !e.isDeleted).toList();
+
+      items.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+      for (int i = 0; i < items.length; i++) {
+        final newCode = '$assetCode-${(i + 1).toString().padLeft(4, '0')}';
+
+        resequenced.add(items[i].copyWith(itemCode: newCode));
+      }
+    }
+
+    resequenced.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    return resequenced;
   }
 
   /// =========================================================
@@ -156,26 +182,32 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
     emit(state.copyWith(loading: true));
 
     /// UPLOAD
-    await repository.uploadAssets(state.localAssets);
-
-    /// RELOAD ONLINE
     final first = state.localAssets.first;
 
+    final pendingUploads = repository.getPendingUploads(
+      branch: first.location,
+      project: first.projectName,
+    );
+
+    await repository.uploadAssets(pendingUploads);
+
+    /// RELOAD ONLINE
+    /// FIRST PROJECT
+
+    /// IMPORTANT
+    /// CLEAR LOCAL PROJECT
+    await repository.clearLocalProject(
+      branch: first.location,
+      project: first.projectName,
+    );
+
+    /// RELOAD ONLINE FRESH
     final online = await repository.getProjectAssets(
       branch: first.location,
       project: first.projectName,
     );
 
-    /// RELOAD LOCAL
-    final local = repository.getLocalAssets(
-      branch: first.location,
-      project: first.projectName,
-    );
-
-    /// MERGE
-    final merged = _mergeAssets(online: online, local: local);
-
-    emit(state.copyWith(loading: false, localAssets: merged));
+    emit(state.copyWith(loading: false, localAssets: online));
   }
 
   /// =========================================================
@@ -185,88 +217,50 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
     emit(state.copyWith(loading: true));
 
     try {
-      /// =========================
-      /// FIND CURRENT ITEM
-      /// =========================
       final current = state.localAssets.firstWhere(
         (e) => e.itemCode == event.itemCode,
       );
 
-      /// =========================
-      /// SUPABASE
-      /// =========================
-      final supabase = Supabase.instance.client;
+      /// IMPORTANT
+      /// MARK AS DELETED ONLY
+      await repository.saveLocalAsset(
+        current.copyWith(isDeleted: true, isSynced: false),
+      );
 
-      /// =========================
-      /// DELETE IMAGE FROM STORAGE
-      /// =========================
-      if (current.imagePath != null &&
-          current.imagePath!.contains('asset-images')) {
-        try {
-          final uri = Uri.parse(current.imagePath!);
+      /// RESEQUENCE LOCAL
+      await repository.resequenceLocalAssets(
+        assetCode: current.assetCode,
+        branch: current.location,
+        project: current.projectName,
+      );
 
-          final segments = uri.pathSegments;
-
-          final bucketIndex = segments.indexOf('asset-images');
-
-          if (bucketIndex != -1 && bucketIndex + 1 < segments.length) {
-            final storagePath = segments.sublist(bucketIndex + 1).join('/');
-
-            await supabase.storage.from('asset-images').remove([storagePath]);
-
-            print('IMAGE DELETED');
-            print(storagePath);
-          }
-        } catch (e) {
-          print('IMAGE DELETE ERROR');
-          print(e);
-        }
-      }
-
-      /// =========================
-      /// DELETE FROM SERVER
-      /// =========================
-      await supabase
-          .from('asset_stock_taking')
-          .delete()
-          .eq('item_code', event.itemCode);
-
-      /// =========================
-      /// DELETE LOCAL
-      /// =========================
-      await repository.deleteLocalAsset(
-        itemCode: event.itemCode,
+      /// IMPORTANT
+      /// RELOAD LOCAL AFTER RESEQUENCE
+      final localAfterResequence = repository.getLocalAssets(
         branch: event.branch,
         project: event.project,
       );
 
-      /// =========================
       /// RELOAD ONLINE
-      /// =========================
       final online = await repository.getProjectAssets(
         branch: event.branch,
         project: event.project,
       );
 
-      /// =========================
       /// RELOAD LOCAL
-      /// =========================
       final local = repository.getLocalAssets(
         branch: event.branch,
         project: event.project,
       );
 
-      /// =========================
       /// MERGE
-      /// =========================
-      final merged = _mergeAssets(online: online, local: local);
+      final merged = _mergeAssets(online: online, local: localAfterResequence);
 
       emit(state.copyWith(loading: false, localAssets: merged));
     } catch (e, stack) {
-      print('================ DELETE ERROR ================');
+      print('DELETE ERROR');
       print(e);
       print(stack);
-      print('==============================================');
 
       emit(state.copyWith(loading: false));
     }

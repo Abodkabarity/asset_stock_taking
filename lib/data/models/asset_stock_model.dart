@@ -8,13 +8,17 @@ class AssetStockModel {
   final String category;
 
   final String subCategory;
+
   final double cost;
+
   final String classification;
 
   final String location;
 
   final String projectName;
+
   final String? localImagePath;
+
   final String status;
 
   final String? imagePath;
@@ -103,9 +107,13 @@ class AssetStockModel {
       status: json['status']?.toString() ?? '',
 
       brand: json['brand']?.toString() ?? '',
+
       cost: (json['cost'] ?? 0).toDouble(),
+
       model: json['model']?.toString() ?? '',
+
       localImagePath: json['local_image_path']?.toString(),
+
       serialNo: json['serial_no']?.toString() ?? '',
 
       isSynced: json['is_synced'] ?? false,
@@ -127,6 +135,7 @@ class AssetStockModel {
     bool? isSynced,
     bool? isDeleted,
     String? assetCode,
+    String? itemCode,
     String? imagePath,
     DateTime? createdAt,
     double? cost,
@@ -137,10 +146,12 @@ class AssetStockModel {
 
       assetCode: assetCode ?? this.assetCode,
 
-      itemCode: itemCode,
+      itemCode: itemCode ?? this.itemCode,
 
       category: category,
+
       cost: cost ?? this.cost,
+
       subCategory: subCategory,
 
       classification: classification,
@@ -162,7 +173,9 @@ class AssetStockModel {
       isDeleted: isDeleted ?? this.isDeleted,
 
       imagePath: imagePath ?? this.imagePath,
+
       localImagePath: localImagePath ?? this.localImagePath,
+
       createdAt: createdAt ?? this.createdAt,
     );
   }

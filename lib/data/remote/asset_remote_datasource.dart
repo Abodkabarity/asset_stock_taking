@@ -24,13 +24,49 @@ class AssetRemoteDatasource {
     /// =========================
     /// DELETE ITEMS
     /// =========================
+    /// =========================
+    /// DELETE ITEMS
+    /// =========================
     final deletedItems = items.where((e) => e.isDeleted).toList();
 
     for (final item in deletedItems) {
+      /// =========================
+      /// MOVE TO DELETED TABLE
+      /// =========================
+      await supabase.from('asset_stock_taking_deleted').insert({
+        'name': item.name,
+        'asset_code': item.assetCode,
+        'item_code': item.itemCode,
+        'category': item.category,
+        'sub_category': item.subCategory,
+        'classification': item.classification,
+        'location': item.location,
+        'project_name': item.projectName,
+        'status': item.status,
+        'brand': item.brand,
+        'model': item.model,
+        'serial_no': item.serialNo,
+        'image_path': item.imagePath,
+        'cost': item.cost,
+        'created_at': item.createdAt.toIso8601String(),
+        'deleted_at': DateTime.now().toIso8601String(),
+      });
+
+      /// =========================
+      /// DELETE FROM MAIN TABLE
+      /// =========================
       await supabase
           .from('asset_stock_taking')
           .delete()
           .eq('item_code', item.itemCode);
+
+      /// =========================
+      /// RESEQUENCE
+      /// =========================
+      await supabase.rpc(
+        'resequence_asset_codes',
+        params: {'p_asset_code': item.assetCode},
+      );
     }
 
     /// =========================

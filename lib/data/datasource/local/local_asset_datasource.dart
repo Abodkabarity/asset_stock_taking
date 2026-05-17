@@ -16,11 +16,14 @@ class LocalAssetDatasource {
         .toList();
 
     /// REMOVE SAME ASSET CODE
-    current.removeWhere((e) => e['item_code'] == model.itemCode);
+    current.removeWhere(
+      (e) =>
+          e['asset_code'] == model.assetCode &&
+          e['created_at'] == model.createdAt.toIso8601String(),
+    );
 
     /// ADD NEW
-    current.add(model.copyWith(isSynced: false, isDeleted: false).toJson());
-
+    current.add(model.toJson());
     await box.put('assets', current);
   }
 
@@ -34,12 +37,7 @@ class LocalAssetDatasource {
     final data = box.get('assets', defaultValue: []);
 
     return (data as List)
-        .where(
-          (e) =>
-              e['location'] == branch &&
-              e['project_name'] == project &&
-              !(e['is_deleted'] ?? false),
-        )
+        .where((e) => e['location'] == branch && e['project_name'] == project)
         .map((e) {
           final item = Map<String, dynamic>.from(e);
 
@@ -117,12 +115,19 @@ class LocalAssetDatasource {
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
-    assets.removeWhere(
-      (e) =>
-          e['item_code'] == itemCode &&
-          e['location'] == branch &&
-          e['project_name'] == project,
-    );
+    /// MARK AS DELETED
+    for (int i = 0; i < assets.length; i++) {
+      final item = assets[i];
+
+      if (item['item_code'] == itemCode &&
+          item['location'] == branch &&
+          item['project_name'] == project) {
+        assets[i]['is_deleted'] = true;
+        assets[i]['is_synced'] = false;
+
+        break;
+      }
+    }
 
     await box.put('assets', assets);
   }
@@ -164,11 +169,111 @@ class LocalAssetDatasource {
         .toList();
 
     /// REMOVE SAME ITEM
-    current.removeWhere((e) => e['item_code'] == model.itemCode);
+    current.removeWhere(
+      (e) =>
+          e['asset_code'] == model.assetCode &&
+          e['created_at'] == model.createdAt.toIso8601String(),
+    );
 
     /// ADD AS SYNCED
     current.add(model.copyWith(isSynced: true, isDeleted: false).toJson());
 
     await box.put('assets', current);
+  }
+
+  /// =========================
+  /// RESEQUENCE LOCAL
+  /// =========================
+  /// =========================
+  /// RESEQUENCE LOCAL
+  /// =========================
+  Future<void> resequenceLocalAssets({
+    required String assetCode,
+    required String branch,
+    required String project,
+  }) async {
+    final data = box.get('assets', defaultValue: []);
+
+    final List<Map<String, dynamic>> assets = (data as List)
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    /// =========================
+    /// ACTIVE ITEMS ONLY
+    /// =========================
+    final activeItems = assets
+        .where(
+          (e) =>
+              e['asset_code'] == assetCode &&
+              e['location'] == branch &&
+              e['project_name'] == project &&
+              !(e['is_deleted'] ?? false),
+        )
+        .toList();
+
+    /// =========================
+    /// SORT BY CREATED DATE
+    /// =========================
+    activeItems.sort((a, b) {
+      final aDate =
+          DateTime.tryParse(a['created_at']?.toString() ?? '') ??
+          DateTime.now();
+
+      final bDate =
+          DateTime.tryParse(b['created_at']?.toString() ?? '') ??
+          DateTime.now();
+
+      return aDate.compareTo(bDate);
+    });
+
+    /// =========================
+    /// RESEQUENCE
+    /// =========================
+    for (int i = 0; i < activeItems.length; i++) {
+      final newCode = '$assetCode-${(i + 1).toString().padLeft(4, '0')}';
+
+      activeItems[i]['item_code'] = newCode;
+    }
+
+    /// =========================
+    /// REMOVE OLD ACTIVE ITEMS
+    /// =========================
+    assets.removeWhere(
+      (e) =>
+          e['asset_code'] == assetCode &&
+          e['location'] == branch &&
+          e['project_name'] == project &&
+          !(e['is_deleted'] ?? false),
+    );
+
+    /// =========================
+    /// ADD RESEQUENCED ITEMS
+    /// =========================
+    assets.addAll(activeItems);
+
+    /// =========================
+    /// SAVE
+    /// =========================
+    await box.put('assets', assets);
+  }
+
+  /// =========================
+  /// GET PENDING UPLOADS
+  /// =========================
+  List<AssetStockModel> getPendingUploads({
+    required String branch,
+    required String project,
+  }) {
+    final data = box.get('assets', defaultValue: []);
+
+    return (data as List)
+        .where(
+          (e) =>
+              e['location'] == branch &&
+              e['project_name'] == project &&
+              (!(e['is_synced'] ?? false) || (e['is_deleted'] ?? false)),
+        )
+        .map((e) => AssetStockModel.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 }

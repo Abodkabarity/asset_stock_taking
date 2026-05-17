@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:printing/printing.dart';
 
 import '../../core/constants/app_colors.dart';
@@ -32,12 +33,18 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
   late TextEditingController brandController;
 
   late TextEditingController modelController;
+
   late TextEditingController costController;
+
   late TextEditingController serialController;
 
   late String selectedStatus;
 
   late AssetItemModel selectedItem;
+
+  File? selectedImage;
+
+  String? selectedImagePath;
 
   final statuses = ['New', 'Very Good', 'Good', 'Fair', 'Bad'];
 
@@ -50,8 +57,12 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
     modelController = TextEditingController(text: widget.asset.model);
 
     serialController = TextEditingController(text: widget.asset.serialNo);
+
     costController = TextEditingController(text: widget.asset.cost.toString());
+
     selectedStatus = widget.asset.status;
+
+    selectedImagePath = widget.asset.imagePath;
 
     final items = context.read<AssetBloc>().state.items;
 
@@ -59,15 +70,32 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
     selectedItem = items.firstWhere(
       (e) => e.itemCode == baseAssetCode,
-
       orElse: () => items.first,
     );
+  }
+
+  Future<void> pickImage() async {
+    final picker = ImagePicker();
+
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
+
+    if (image == null) return;
+
+    setState(() {
+      selectedImage = File(image.path);
+
+      selectedImagePath = image.path;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.white,
+
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
 
@@ -97,49 +125,159 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                     ],
                   ),
                 ),
-
-                /// IMAGE BUTTON
-                if (widget.asset.imagePath != null &&
-                    widget.asset.imagePath!.isNotEmpty)
-                  IconButton(
-                    icon: const Icon(Icons.image),
-
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-
-                        builder: (_) {
-                          return Dialog(
-                            child: InteractiveViewer(
-                              child:
-                                  (widget.asset.imagePath != null &&
-                                      widget.asset.imagePath!.startsWith(
-                                        'http',
-                                      ))
-                                  ? Image.network(
-                                      widget.asset.imagePath!,
-                                      fit: BoxFit.cover,
-                                    )
-                                  : Image.file(
-                                      File(
-                                        widget.asset.localImagePath ??
-                                            widget.asset.imagePath!,
-                                      ),
-                                      fit: BoxFit.contain,
-                                    ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
               ],
             ),
 
             const SizedBox(height: 20),
 
-            /// NAME DROPDOWN
-            /// NAME READ ONLY
+            /// IMAGE SECTION
+            Column(
+              children: [
+                if (selectedImagePath != null && selectedImagePath!.isNotEmpty)
+                  Stack(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) {
+                              return Dialog(
+                                child: InteractiveViewer(
+                                  child: selectedImagePath!.startsWith('http')
+                                      ? Image.network(
+                                          selectedImagePath!,
+                                          fit: BoxFit.cover,
+                                        )
+                                      : Image.file(
+                                          File(selectedImagePath!),
+                                          fit: BoxFit.contain,
+                                        ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+
+                          child: selectedImagePath!.startsWith('http')
+                              ? Image.network(
+                                  selectedImagePath!,
+                                  height: 120,
+                                  width: 120,
+                                  fit: BoxFit.cover,
+                                )
+                              : Image.file(
+                                  File(selectedImagePath!),
+                                  height: 120,
+                                  width: 120,
+                                  fit: BoxFit.cover,
+                                ),
+                        ),
+                      ),
+
+                      Positioned(
+                        top: 0,
+                        right: 0,
+
+                        child: InkWell(
+                          onTap: () async {
+                            final confirmDelete = await showDialog<bool>(
+                              context: context,
+
+                              builder: (dialogContext) {
+                                return AlertDialog(
+                                  backgroundColor: Colors.white,
+
+                                  title: const Text('Delete Image'),
+
+                                  content: const Text(
+                                    'Are you sure you want to remove this image?',
+                                  ),
+
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.pop(dialogContext, false);
+                                      },
+
+                                      child: const Text(
+                                        'Cancel',
+                                        style: TextStyle(color: Colors.grey),
+                                      ),
+                                    ),
+
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.red,
+                                      ),
+
+                                      onPressed: () {
+                                        Navigator.pop(dialogContext, true);
+                                      },
+
+                                      child: const Text(
+                                        'Delete',
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+
+                            if (confirmDelete == true) {
+                              setState(() {
+                                selectedImage = null;
+
+                                selectedImagePath = null;
+                              });
+                            }
+                          },
+
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+
+                            child: const Icon(
+                              Icons.delete,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                const SizedBox(height: 10),
+
+                ElevatedButton.icon(
+                  onPressed: pickImage,
+
+                  icon: const Icon(Icons.image, color: Colors.white),
+
+                  label: Text(
+                    selectedImagePath == null ? 'Add Image' : 'Change Image',
+
+                    style: const TextStyle(color: Colors.white),
+                  ),
+
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.secondaryColor,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            /// NAME
             TextField(
               controller: TextEditingController(text: selectedItem.name),
 
@@ -147,18 +285,26 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
               decoration: InputDecoration(
                 labelText: 'Name',
+
                 filled: true,
+
                 fillColor: AppColors.backgroundWidget,
+
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
+
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
+
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
               ),
@@ -166,23 +312,32 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
             const SizedBox(height: 12),
 
+            /// BRAND
             TextField(
               controller: brandController,
 
               decoration: InputDecoration(
                 labelText: 'Brand',
+
                 filled: true,
+
                 fillColor: AppColors.backgroundWidget,
+
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
+
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
+
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
               ),
@@ -190,23 +345,32 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
             const SizedBox(height: 12),
 
+            /// MODEL
             TextField(
               controller: modelController,
 
               decoration: InputDecoration(
                 labelText: 'Model',
+
                 filled: true,
+
                 fillColor: AppColors.backgroundWidget,
+
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
+
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
+
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
               ),
@@ -214,23 +378,32 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
             const SizedBox(height: 12),
 
+            /// SERIAL
             TextField(
               controller: serialController,
 
               decoration: InputDecoration(
                 labelText: 'Serial No',
+
                 filled: true,
+
                 fillColor: AppColors.backgroundWidget,
+
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
+
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
+
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
               ),
@@ -238,6 +411,7 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
             const SizedBox(height: 12),
 
+            /// COST
             TextField(
               controller: costController,
 
@@ -249,27 +423,32 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                 labelText: 'Cost',
 
                 filled: true,
+
                 fillColor: AppColors.backgroundWidget,
 
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
 
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
 
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
               ),
             ),
+
             const SizedBox(height: 12),
 
-            /// STATUS DROPDOWN
+            /// STATUS
             DropdownButtonFormField<String>(
               initialValue: selectedStatus,
 
@@ -277,20 +456,24 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                 labelText: 'Status',
 
                 filled: true,
+
                 fillColor: AppColors.backgroundWidget,
 
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
 
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
 
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
+
                   borderSide: BorderSide(color: AppColors.primaryColor),
                 ),
               ),
@@ -312,23 +495,71 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
             Row(
               children: [
-                /// DELETE
+                /// DELETE ASSET
                 Expanded(
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                     ),
 
-                    onPressed: () {
-                      context.read<AssetBloc>().add(
-                        DeleteAssetEvent(
-                          itemCode: widget.asset.itemCode,
-                          branch: widget.branch,
-                          project: widget.project,
-                        ),
+                    onPressed: () async {
+                      final confirmDelete = await showDialog<bool>(
+                        context: context,
+
+                        builder: (dialogContext) {
+                          return AlertDialog(
+                            backgroundColor: Colors.white,
+
+                            title: const Text('Confirm Delete'),
+
+                            content: Text(
+                              'Are you sure you want to delete ${widget.asset.name} ?',
+                            ),
+
+                            actions: [
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.pop(dialogContext, false);
+                                },
+
+                                child: const Text(
+                                  'Cancel',
+                                  style: TextStyle(color: Colors.grey),
+                                ),
+                              ),
+
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                ),
+
+                                onPressed: () {
+                                  Navigator.pop(dialogContext, true);
+                                },
+
+                                child: const Text(
+                                  'Delete',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       );
 
-                      Navigator.pop(context);
+                      if (confirmDelete == true) {
+                        context.read<AssetBloc>().add(
+                          DeleteAssetEvent(
+                            itemCode: widget.asset.itemCode,
+
+                            branch: widget.branch,
+
+                            project: widget.project,
+                          ),
+                        );
+
+                        Navigator.pop(context);
+                      }
                     },
 
                     child: const Text(
@@ -350,9 +581,11 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
                       await Printing.layoutPdf(onLayout: (_) async => pdf);
                     },
+
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.secondaryColor,
                     ),
+
                     child: const Text(
                       'Print',
                       style: TextStyle(color: Colors.white),
@@ -369,13 +602,17 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
               children: [
                 Expanded(
                   child: TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+
                     child: Text(
                       "Cancel",
                       style: TextStyle(color: AppColors.secondaryColor),
                     ),
                   ),
                 ),
+
                 Expanded(
                   child: SizedBox(
                     width: double.infinity,
@@ -387,6 +624,7 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                               costController.text.replaceAll(',', ''),
                             ) ??
                             0;
+
                         final updated = AssetStockModel(
                           name: selectedItem.name,
 
@@ -411,25 +649,33 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                           model: modelController.text,
 
                           serialNo: serialController.text,
+
                           cost: cost,
-                          imagePath: widget.asset.imagePath,
+
+                          imagePath: selectedImagePath,
+
                           createdAt: DateTime.now(),
+
                           isSynced: false,
                         );
 
                         context.read<AssetBloc>().add(
                           SaveAssetEvent(
                             updated,
+
                             branch: widget.branch,
+
                             project: widget.project,
                           ),
                         );
 
                         Navigator.pop(context);
                       },
+
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryColor,
                       ),
+
                       child: const Text(
                         'Save',
                         style: TextStyle(color: Colors.white),
