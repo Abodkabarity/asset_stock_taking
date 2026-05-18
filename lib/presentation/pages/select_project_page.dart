@@ -343,7 +343,7 @@ class _SelectProjectPageState extends State<SelectProjectPage> {
                   final project = projects[index];
 
                   return Card(
-                    margin: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.all(5),
 
                     child: ListTile(
                       leading: const Icon(Icons.folder),

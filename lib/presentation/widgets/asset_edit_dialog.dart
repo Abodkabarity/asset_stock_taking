@@ -74,21 +74,91 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
     );
   }
 
-  Future<void> pickImage() async {
+  Future<void> pickImage(ImageSource source) async {
     final picker = ImagePicker();
 
-    final image = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 70,
-    );
+    final image = await picker.pickImage(source: source, imageQuality: 70);
 
     if (image == null) return;
 
     setState(() {
       selectedImage = File(image.path);
 
+      /// IMPORTANT
+      /// LOCAL TEMP IMAGE
       selectedImagePath = image.path;
     });
+  }
+
+  Future<void> showImagePickerOptions() async {
+    showModalBottomSheet(
+      context: context,
+
+      backgroundColor: Colors.white,
+
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+
+              children: [
+                Container(
+                  width: 50,
+                  height: 5,
+
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                const Text(
+                  'Select Image',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+
+                const SizedBox(height: 20),
+
+                ListTile(
+                  leading: const Icon(Icons.camera_alt, color: Colors.blue),
+
+                  title: const Text('Take Photo'),
+
+                  onTap: () async {
+                    Navigator.pop(context);
+
+                    await pickImage(ImageSource.camera);
+                  },
+                ),
+
+                ListTile(
+                  leading: const Icon(Icons.photo_library, color: Colors.green),
+
+                  title: const Text('Choose From Gallery'),
+
+                  onTap: () async {
+                    Navigator.pop(context);
+
+                    await pickImage(ImageSource.gallery);
+                  },
+                ),
+
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -258,7 +328,7 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                 const SizedBox(height: 10),
 
                 ElevatedButton.icon(
-                  onPressed: pickImage,
+                  onPressed: showImagePickerOptions,
 
                   icon: const Icon(Icons.image, color: Colors.white),
 
@@ -652,10 +722,19 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
                           cost: cost,
 
-                          imagePath: selectedImagePath,
+                          imagePath:
+                              selectedImagePath != null &&
+                                  selectedImagePath!.startsWith('http')
+                              ? selectedImagePath
+                              : null,
 
-                          createdAt: DateTime.now(),
+                          localImagePath:
+                              selectedImagePath != null &&
+                                  !selectedImagePath!.startsWith('http')
+                              ? selectedImagePath
+                              : null,
 
+                          createdAt: widget.asset.createdAt,
                           isSynced: false,
                         );
 

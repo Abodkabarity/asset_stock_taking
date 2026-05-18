@@ -1,4 +1,6 @@
 class AssetStockModel {
+  final int? id;
+
   final String name;
 
   final String assetCode;
@@ -37,6 +39,7 @@ class AssetStockModel {
   final DateTime createdAt;
 
   AssetStockModel({
+    this.id,
     required this.name,
     required this.assetCode,
     required this.itemCode,
@@ -62,6 +65,7 @@ class AssetStockModel {
   /// =========================================================
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'name': name,
       'asset_code': assetCode,
       'item_code': itemCode,
@@ -88,6 +92,8 @@ class AssetStockModel {
   /// =========================================================
   factory AssetStockModel.fromJson(Map<String, dynamic> json) {
     return AssetStockModel(
+      id: json['id'],
+
       name: json['name']?.toString() ?? '',
 
       assetCode: json['asset_code']?.toString() ?? '',
@@ -132,6 +138,7 @@ class AssetStockModel {
   /// COPY WITH
   /// =========================================================
   AssetStockModel copyWith({
+    int? id,
     bool? isSynced,
     bool? isDeleted,
     String? assetCode,
@@ -142,6 +149,8 @@ class AssetStockModel {
     String? localImagePath,
   }) {
     return AssetStockModel(
+      id: id ?? this.id,
+
       name: name,
 
       assetCode: assetCode ?? this.assetCode,

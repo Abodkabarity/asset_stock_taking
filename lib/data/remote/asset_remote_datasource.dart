@@ -68,6 +68,7 @@ class AssetRemoteDatasource {
         params: {'p_asset_code': item.assetCode},
       );
     }
+    await Future.delayed(const Duration(milliseconds: 800));
 
     /// =========================
     /// BUILD UPLOAD LIST
@@ -118,9 +119,9 @@ class AssetRemoteDatasource {
       /// ADD TO UPSERT LIST
       /// =========================
       uploadItems.add({
+        'id': e.id,
         'asset_code': e.assetCode,
         'name': e.name,
-        'item_code': e.itemCode,
         'category': e.category,
         'sub_category': e.subCategory,
         'classification': e.classification,
@@ -142,7 +143,7 @@ class AssetRemoteDatasource {
     if (uploadItems.isNotEmpty) {
       await supabase
           .from('asset_stock_taking')
-          .upsert(uploadItems, onConflict: 'item_code');
+          .upsert(uploadItems, onConflict: 'id');
 
       print('UPLOAD SUCCESS');
     }
