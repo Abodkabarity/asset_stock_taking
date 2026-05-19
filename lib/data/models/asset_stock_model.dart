@@ -65,7 +65,7 @@ class AssetStockModel {
   /// =========================================================
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
+      if (id != null) 'id': id,
       'name': name,
       'asset_code': assetCode,
       'item_code': itemCode,
@@ -129,7 +129,9 @@ class AssetStockModel {
       imagePath: json['image_path']?.toString(),
 
       createdAt:
-          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+          (DateTime.tryParse(
+            json['created_at']?.toString() ?? '',
+          )?.toLocal()) ??
           DateTime.now(),
     );
   }

@@ -2,6 +2,7 @@ import 'package:asset_stock_taking/presentation/pages/select_project_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../core/constants/app_colors.dart';
 import '../bloc/asset_bloc.dart';
 
 class SelectBranchPage extends StatefulWidget {
@@ -179,8 +180,22 @@ class _SelectBranchPageState extends State<SelectBranchPage> {
 
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(
+                              color: AppColors.primaryColor,
+                            ),
                           ),
-
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(
+                              color: AppColors.primaryColor,
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(
+                              color: AppColors.primaryColor,
+                            ),
+                          ),
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 14,

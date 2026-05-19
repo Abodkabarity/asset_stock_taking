@@ -35,7 +35,9 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
     /// ONLINE FIRST
     /// =========================
     for (final item in online) {
-      final key = '${item.assetCode}_${item.createdAt.toIso8601String()}';
+      final key =
+          item.id?.toString() ??
+          '${item.assetCode}_${item.createdAt.toIso8601String()}';
 
       mergedMap[key] = item;
     }
@@ -44,7 +46,9 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
     /// LOCAL OVERRIDE
     /// =========================
     for (final item in local) {
-      final key = '${item.assetCode}_${item.createdAt.toIso8601String()}';
+      final key =
+          item.id?.toString() ??
+          '${item.assetCode}_${item.createdAt.toIso8601String()}';
 
       final existing = mergedMap[key];
 
@@ -69,36 +73,30 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
     /// =========================
     /// GROUP BY ASSET CODE
     /// =========================
-    final Map<String, List<AssetStockModel>> grouped = {};
+    /// ACTIVE ONLY
+    final active = merged.where((e) => !e.isDeleted).toList();
+    active.sort((a, b) {
+      final dateCompare = b.createdAt.compareTo(a.createdAt);
 
-    for (final item in merged) {
-      grouped.putIfAbsent(item.assetCode, () => []);
-
-      grouped[item.assetCode]!.add(item);
-    }
-
-    /// =========================
-    /// UI RESEQUENCE
-    /// =========================
-    final List<AssetStockModel> resequenced = [];
-
-    for (final entry in grouped.entries) {
-      final assetCode = entry.key;
-
-      final items = entry.value.where((e) => !e.isDeleted).toList();
-
-      items.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-
-      for (int i = 0; i < items.length; i++) {
-        final newCode = '$assetCode-${(i + 1).toString().padLeft(4, '0')}';
-
-        resequenced.add(items[i].copyWith(itemCode: newCode));
+      if (dateCompare != 0) {
+        return dateCompare;
       }
-    }
 
-    resequenced.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      if (!a.isSynced && b.isSynced) {
+        return -1;
+      }
 
-    return resequenced;
+      if (a.isSynced && !b.isSynced) {
+        return 1;
+      }
+
+      /// fallback
+      return b.itemCode.compareTo(a.itemCode);
+    });
+
+    /// SORT NEWEST FIRST
+
+    return active;
   }
 
   /// =========================================================
@@ -154,22 +152,41 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
     /// SAVE LOCAL
     await repository.saveLocalAsset(event.model.copyWith(isSynced: false));
 
-    /// RELOAD ONLINE
-    final online = await repository.getProjectAssets(
-      branch: event.branch,
-      project: event.project,
-    );
-
-    /// RELOAD LOCAL
+    /// RELOAD LOCAL ONLY
     final local = repository.getLocalAssets(
       branch: event.branch,
       project: event.project,
     );
+    print('======================');
+    print('LOCAL ORDER');
+    print('======================');
 
-    /// MERGE
-    final merged = _mergeAssets(online: online, local: local);
+    for (final e in local) {
+      print(
+        '${e.itemCode} | '
+        '${e.createdAt} | '
+        'SYNCED: ${e.isSynced}',
+      );
+    }
+    local.sort((a, b) {
+      final dateCompare = b.createdAt.compareTo(a.createdAt);
 
-    emit(state.copyWith(localAssets: merged, saving: false));
+      if (dateCompare != 0) {
+        return dateCompare;
+      }
+
+      if (!a.isSynced && b.isSynced) {
+        return -1;
+      }
+
+      if (a.isSynced && !b.isSynced) {
+        return 1;
+      }
+
+      return b.itemCode.compareTo(a.itemCode);
+    });
+
+    emit(state.copyWith(localAssets: local, saving: false));
   }
 
   /// =========================================================
@@ -196,18 +213,22 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
 
     /// IMPORTANT
     /// CLEAR LOCAL PROJECT
-    await repository.clearLocalProject(
-      branch: first.location,
-      project: first.projectName,
-    );
-
-    /// RELOAD ONLINE FRESH
+    /// RELOAD ONLINE AFTER UPLOAD
     final online = await repository.getProjectAssets(
       branch: first.location,
       project: first.projectName,
     );
 
-    emit(state.copyWith(loading: false, localAssets: online));
+    /// RELOAD LOCAL
+    final local = repository.getLocalAssets(
+      branch: first.location,
+      project: first.projectName,
+    );
+
+    /// MERGE
+    final merged = _mergeAssets(online: online, local: local);
+
+    emit(state.copyWith(loading: false, localAssets: merged));
   }
 
   /// =========================================================
@@ -221,24 +242,9 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
         (e) => e.itemCode == event.itemCode,
       );
 
-      /// IMPORTANT
       /// MARK AS DELETED ONLY
       await repository.saveLocalAsset(
         current.copyWith(isDeleted: true, isSynced: false),
-      );
-
-      /// RESEQUENCE LOCAL
-      await repository.resequenceLocalAssets(
-        assetCode: current.assetCode,
-        branch: current.location,
-        project: current.projectName,
-      );
-
-      /// IMPORTANT
-      /// RELOAD LOCAL AFTER RESEQUENCE
-      final localAfterResequence = repository.getLocalAssets(
-        branch: event.branch,
-        project: event.project,
       );
 
       /// RELOAD ONLINE
@@ -254,7 +260,7 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
       );
 
       /// MERGE
-      final merged = _mergeAssets(online: online, local: localAfterResequence);
+      final merged = _mergeAssets(online: online, local: local);
 
       emit(state.copyWith(loading: false, localAssets: merged));
     } catch (e, stack) {

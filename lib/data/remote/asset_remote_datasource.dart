@@ -28,8 +28,9 @@ class AssetRemoteDatasource {
     /// DELETE ITEMS
     /// =========================
     final deletedItems = items.where((e) => e.isDeleted).toList();
-
     for (final item in deletedItems) {
+      print('DELETING FROM SERVER: ${item.itemCode}');
+
       /// =========================
       /// MOVE TO DELETED TABLE
       /// =========================
@@ -63,10 +64,6 @@ class AssetRemoteDatasource {
       /// =========================
       /// RESEQUENCE
       /// =========================
-      await supabase.rpc(
-        'resequence_asset_codes',
-        params: {'p_asset_code': item.assetCode},
-      );
     }
     await Future.delayed(const Duration(milliseconds: 800));
 
@@ -76,6 +73,7 @@ class AssetRemoteDatasource {
     final List<Map<String, dynamic>> uploadItems = [];
 
     for (final e in items.where((e) => !e.isDeleted)) {
+      print('UPSERT ITEM: ${e.itemCode}');
       String? imageUrl = e.imagePath;
 
       /// =========================
@@ -118,23 +116,41 @@ class AssetRemoteDatasource {
       /// =========================
       /// ADD TO UPSERT LIST
       /// =========================
-      uploadItems.add({
-        'id': e.id,
+      final Map<String, dynamic> row = {
         'asset_code': e.assetCode,
+
+        'item_code': e.itemCode,
+
         'name': e.name,
+
         'category': e.category,
+
         'sub_category': e.subCategory,
+
         'classification': e.classification,
+
         'location': e.location,
+
         'project_name': e.projectName,
+
         'status': e.status,
+
         'brand': e.brand,
+
         'model': e.model,
+
         'serial_no': e.serialNo,
+
         'image_path': imageUrl,
+
         'cost': e.cost,
+
         'created_at': e.createdAt.toIso8601String(),
-      });
+      };
+
+      /// EXISTING SERVER ITEM
+
+      uploadItems.add(row);
     }
 
     /// =========================
@@ -143,7 +159,7 @@ class AssetRemoteDatasource {
     if (uploadItems.isNotEmpty) {
       await supabase
           .from('asset_stock_taking')
-          .upsert(uploadItems, onConflict: 'id');
+          .upsert(uploadItems, onConflict: 'item_code');
 
       print('UPLOAD SUCCESS');
     }
@@ -253,7 +269,7 @@ class AssetRemoteDatasource {
         .select()
         .eq('location', branch)
         .eq('project_name', project)
-        .order('item_code');
+        .order('created_at', ascending: false);
 
     return response
         .map<AssetStockModel>((e) => AssetStockModel.fromJson(e))
@@ -306,5 +322,18 @@ class AssetRemoteDatasource {
       print(e);
       return null;
     }
+  }
+
+  Future<List<AssetStockModel>> getAllAssetsByAssetCode(
+    String assetCode,
+  ) async {
+    final response = await supabase
+        .from('asset_stock_taking')
+        .select()
+        .eq('asset_code', assetCode);
+
+    return response
+        .map<AssetStockModel>((e) => AssetStockModel.fromJson(e))
+        .toList();
   }
 }

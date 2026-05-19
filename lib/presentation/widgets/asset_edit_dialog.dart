@@ -694,8 +694,9 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                               costController.text.replaceAll(',', ''),
                             ) ??
                             0;
-
+                        print('EDIT ID: ${widget.asset.id}');
                         final updated = AssetStockModel(
+                          id: widget.asset.id,
                           name: selectedItem.name,
 
                           assetCode: widget.asset.assetCode,

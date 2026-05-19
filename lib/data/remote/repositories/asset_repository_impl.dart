@@ -59,23 +59,8 @@ class AssetRepositoryImpl implements AssetRepository {
     for (final item in changedItems) {
       /// DELETED ITEM
       if (item.isDeleted) {
-        final localItems = localDatasource.getAssets(
-          branch: item.location,
-          project: item.projectName,
-        );
-
-        final deletedLocal = localItems.firstWhere(
-          (e) =>
-              e.assetCode == item.assetCode &&
-              e.createdAt == item.createdAt &&
-              e.isDeleted,
-        );
-
-        await localDatasource.deleteAsset(
-          itemCode: deletedLocal.itemCode,
-          branch: item.location,
-          project: item.projectName,
-        );
+        /// REMOVE COMPLETELY FROM LOCAL
+        await localDatasource.removeAssetPermanently(itemCode: item.itemCode);
 
         continue;
       }
@@ -89,29 +74,26 @@ class AssetRepositoryImpl implements AssetRepository {
 
   @override
   Future<String> generateAssetCode(
-    String itemCode, {
+    String assetCode, {
     required String branch,
     required String project,
   }) async {
     /// =========================
-    /// LOCAL
+    /// LOCAL ITEMS
     /// =========================
     final localItems = localDatasource
         .getAssets(branch: branch, project: project)
-        .where((e) => e.assetCode == itemCode)
+        .where((e) => e.assetCode == assetCode)
         .toList();
 
     /// =========================
-    /// SERVER
+    /// SERVER ITEMS
+    /// IMPORTANT:
+    /// GLOBAL NOT PROJECT
     /// =========================
-    final serverItems = await remoteDatasource.getProjectAssets(
-      branch: branch,
-      project: project,
+    final serverItems = await remoteDatasource.getAllAssetsByAssetCode(
+      assetCode,
     );
-
-    final serverFiltered = serverItems
-        .where((e) => e.assetCode == itemCode)
-        .toList();
 
     /// =========================
     /// USED SERIALS
@@ -130,7 +112,7 @@ class AssetRepositoryImpl implements AssetRepository {
     }
 
     /// SERVER
-    for (final item in serverFiltered) {
+    for (final item in serverItems) {
       final parts = item.itemCode.split('-');
 
       final serial = int.tryParse(parts.last);
@@ -141,7 +123,7 @@ class AssetRepositoryImpl implements AssetRepository {
     }
 
     /// =========================
-    /// FIND FIRST EMPTY NUMBER
+    /// FIND NEXT EMPTY
     /// =========================
     int nextSerial = 1;
 
@@ -151,7 +133,7 @@ class AssetRepositoryImpl implements AssetRepository {
 
     final serial = nextSerial.toString().padLeft(4, '0');
 
-    return '$itemCode-$serial';
+    return '$assetCode-$serial';
   }
 
   @override
@@ -266,24 +248,6 @@ class AssetRepositoryImpl implements AssetRepository {
     /// SAVE ONLINE LOCALLY AS SYNCED
     /// SAVE ONLINE LOCALLY AS SYNCED
     for (final item in online) {
-      /// CHECK IF LOCAL MODIFIED EXISTS
-      final localItems = localDatasource.getAssets(
-        branch: branch,
-        project: project,
-      );
-
-      final localModified = localItems.any(
-        (e) =>
-            e.assetCode == item.assetCode &&
-            e.createdAt == item.createdAt &&
-            (!e.isSynced || e.isDeleted),
-      );
-
-      /// DO NOT OVERRIDE LOCAL MODIFIED DATA
-      if (localModified) {
-        continue;
-      }
-
       await localDatasource.saveSyncedAsset(
         item.copyWith(isSynced: true, isDeleted: false),
       );
@@ -308,23 +272,15 @@ class AssetRepositoryImpl implements AssetRepository {
   }
 
   @override
-  Future<void> resequenceLocalAssets({
-    required String assetCode,
-    required String branch,
-    required String project,
-  }) async {
-    await localDatasource.resequenceLocalAssets(
-      assetCode: assetCode,
-      branch: branch,
-      project: project,
-    );
-  }
-
-  @override
   List<AssetStockModel> getPendingUploads({
     required String branch,
     required String project,
   }) {
     return localDatasource.getPendingUploads(branch: branch, project: project);
+  }
+
+  @override
+  Future<void> removeAssetPermanently({required String itemCode}) {
+    return localDatasource.removeAssetPermanently(itemCode: itemCode);
   }
 }

@@ -38,7 +38,7 @@ class _AssetStockPageState extends State<AssetStockPage> {
 
   TextEditingController? autoCompleteController;
   final modelController = TextEditingController();
-
+  String searchQuery = '';
   final serialController = TextEditingController();
   final costController = TextEditingController();
   final qtyController = TextEditingController();
@@ -130,7 +130,10 @@ class _AssetStockPageState extends State<AssetStockPage> {
 
         imagePath: null,
         localImagePath: selectedImage?.path,
-        createdAt: DateTime.now(),
+        createdAt: DateTime.now()
+            .toUtc()
+            .add(const Duration(hours: 4))
+            .add(Duration(microseconds: i)),
         isSynced: false,
         cost: cost,
         isDeleted: false,
@@ -141,39 +144,24 @@ class _AssetStockPageState extends State<AssetStockPage> {
     }
 
     /// RELOAD ONLINE
-    final online = await bloc.repository.getProjectAssets(
-      branch: widget.branch,
-      project: widget.project,
-    );
-
-    /// RELOAD LOCAL
+    /// RELOAD LOCAL ONLY
     final local = bloc.repository.getLocalAssets(
       branch: widget.branch,
       project: widget.project,
     );
 
-    /// =========================
-    /// MERGE
-    /// =========================
-    final Map<String, AssetStockModel> mergedMap = {};
+    local.sort((a, b) {
+      final compare = b.createdAt.compareTo(a.createdAt);
 
-    /// ONLINE
-    for (final item in online) {
-      mergedMap[item.itemCode] = item;
-    }
+      if (compare != 0) {
+        return compare;
+      }
 
-    /// LOCAL REPLACE ONLINE
-    for (final item in local) {
-      mergedMap[item.itemCode] = item;
-    }
-
-    final merged = mergedMap.values.toList();
-
-    /// SORT NEWEST FIRST
-    merged.sort((a, b) => b.itemCode.compareTo(a.itemCode));
+      return b.itemCode.compareTo(a.itemCode);
+    });
 
     /// STOP LOADING
-    bloc.emit(bloc.state.copyWith(localAssets: merged, saving: false));
+    bloc.emit(bloc.state.copyWith(localAssets: local, saving: false));
 
     /// CLEAR
     assetCodeController.clear();
@@ -232,26 +220,45 @@ class _AssetStockPageState extends State<AssetStockPage> {
         actions: [
           IconButton(
             onPressed: () async {
-              final assets = await context
-                  .read<AssetBloc>()
-                  .repository
-                  .getProjectAssets(
-                    branch: widget.branch,
-                    project: widget.project,
+              try {
+                final supabase = Supabase.instance.client;
+
+                /// =========================
+                /// SERVER ONLY
+                /// =========================
+                final response = await supabase
+                    .from('asset_stock_taking')
+                    .select()
+                    .eq('location', widget.branch)
+                    .eq('project_name', widget.project);
+
+                /// CONVERT
+                final assets = response
+                    .map<AssetStockModel>((e) => AssetStockModel.fromJson(e))
+                    .toList();
+
+                if (assets.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('No Uploaded Assets Found')),
                   );
 
-              if (assets.isEmpty) {
+                  return;
+                }
+
+                /// EXPORT EXCEL
+                await AssetExcelService.exportAssets(
+                  assets: assets,
+                  fileName: '${widget.branch}_${widget.project}_assets',
+                );
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Excel Exported Successfully')),
+                );
+              } catch (e) {
                 ScaffoldMessenger.of(
                   context,
-                ).showSnackBar(const SnackBar(content: Text('No Data Found')));
-
-                return;
+                ).showSnackBar(SnackBar(content: Text('Export Failed: $e')));
               }
-
-              await AssetExcelService.exportAssets(
-                assets: assets,
-                fileName: '${widget.branch}_${widget.project}_assets',
-              );
             },
 
             icon: const Icon(Icons.file_download),
@@ -415,8 +422,47 @@ class _AssetStockPageState extends State<AssetStockPage> {
                             .isEmpty ||
                         state.loading
                     ? null
-                    : () {
+                    : () async {
                         context.read<AssetBloc>().add(UploadAssetsEvent());
+
+                        await Future.doWhile(() async {
+                          await Future.delayed(
+                            const Duration(milliseconds: 200),
+                          );
+
+                          return context.read<AssetBloc>().state.loading;
+                        });
+
+                        if (!context.mounted) {
+                          return;
+                        }
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: Colors.green,
+                            behavior: SnackBarBehavior.floating,
+
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+
+                            content: const Row(
+                              children: [
+                                Icon(Icons.check_circle, color: Colors.white),
+
+                                SizedBox(width: 12),
+
+                                Text(
+                                  'Upload Successfully',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
                       },
 
                 icon: state.loading
@@ -450,533 +496,656 @@ class _AssetStockPageState extends State<AssetStockPage> {
         ],
       ),
 
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage("assets/images/background.png"),
-            fit: BoxFit.fill,
-          ),
-        ),
-        child: BlocBuilder<AssetBloc, AssetState>(
-          builder: (context, state) {
-            final visibleAssets = state.localAssets
-                .where((e) => !e.isDeleted)
-                .toList();
-            return Padding(
-              padding: const EdgeInsets.all(16),
+      body: SingleChildScrollView(
+        child: SizedBox(
+          height: 1000,
+          child: Container(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage("assets/images/background.png"),
+                fit: BoxFit.fill,
+              ),
+            ),
+            child: BlocBuilder<AssetBloc, AssetState>(
+              builder: (context, state) {
+                if (state.syncingMaster) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
 
-              child: Column(
-                children: [
-                  /// SEARCH ASSET
-                  Autocomplete<AssetItemModel>(
-                    displayStringForOption: (option) {
-                      return option.name;
-                    },
+                        SizedBox(height: 20),
 
-                    optionsBuilder: (TextEditingValue textEditingValue) {
-                      if (textEditingValue.text.isEmpty) {
-                        return const Iterable<AssetItemModel>.empty();
-                      }
+                        Text(
+                          'Loading Assets...',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                final visibleAssets = state.localAssets.where((e) {
+                  if (e.isDeleted) {
+                    return false;
+                  }
 
-                      return state.items.where((item) {
-                        final search = textEditingValue.text.toLowerCase();
+                  if (searchQuery.isEmpty) {
+                    return true;
+                  }
 
-                        return item.name.toLowerCase().contains(search) ||
-                            item.itemCode.toLowerCase().contains(search) ||
-                            item.category.toLowerCase().contains(search) ||
-                            item.subCategory.toLowerCase().contains(search);
-                      });
-                    },
+                  final search = searchQuery.toLowerCase();
 
-                    onSelected: (AssetItemModel selection) async {
-                      selectedItem = selection;
+                  return e.name.toLowerCase().contains(search) ||
+                      e.itemCode.toLowerCase().contains(search) ||
+                      e.brand.toLowerCase().contains(search) ||
+                      e.category.toLowerCase().contains(search) ||
+                      e.subCategory.toLowerCase().contains(search) ||
+                      e.classification.toLowerCase().contains(search) ||
+                      e.status.toLowerCase().contains(search);
+                }).toList();
 
-                      final code = await context
-                          .read<AssetBloc>()
-                          .repository
-                          .generateAssetCode(
-                            selection.itemCode,
-                            branch: widget.branch,
-                            project: widget.project,
-                          );
+                visibleAssets.sort((a, b) {
+                  final compare = b.createdAt.millisecondsSinceEpoch.compareTo(
+                    a.createdAt.millisecondsSinceEpoch,
+                  );
 
-                      assetCodeController.text = code;
+                  if (compare != 0) {
+                    return compare;
+                  }
 
-                      setState(() {});
-                    },
+                  if (!a.isSynced && b.isSynced) {
+                    return -1;
+                  }
 
-                    fieldViewBuilder:
-                        (context, controller, focusNode, onFieldSubmitted) {
-                          /// IMPORTANT
-                          autoCompleteController = controller;
-                          return TextField(
-                            controller: controller,
+                  if (a.isSynced && !b.isSynced) {
+                    return 1;
+                  }
 
-                            focusNode: focusNode,
+                  return b.itemCode.compareTo(a.itemCode);
+                });
+                return Padding(
+                  padding: const EdgeInsets.all(16),
 
-                            decoration: InputDecoration(
-                              hintText: 'Search Asset',
+                  child: Column(
+                    children: [
+                      /// SEARCH ASSET
+                      Autocomplete<AssetItemModel>(
+                        displayStringForOption: (option) {
+                          return option.name;
+                        },
 
-                              prefixIcon: const Icon(Icons.search),
+                        optionsBuilder: (TextEditingValue textEditingValue) {
+                          if (textEditingValue.text.isEmpty) {
+                            return const Iterable<AssetItemModel>.empty();
+                          }
 
-                              fillColor: AppColors.backgroundWidget,
+                          return state.items.where((item) {
+                            final search = textEditingValue.text.toLowerCase();
 
-                              filled: true,
+                            return item.name.toLowerCase().contains(search) ||
+                                item.itemCode.toLowerCase().contains(search) ||
+                                item.category.toLowerCase().contains(search) ||
+                                item.subCategory.toLowerCase().contains(search);
+                          });
+                        },
 
-                              border: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: AppColors.primaryColor,
+                        onSelected: (AssetItemModel selection) async {
+                          selectedItem = selection;
+
+                          final code = await context
+                              .read<AssetBloc>()
+                              .repository
+                              .generateAssetCode(
+                                selection.itemCode,
+                                branch: widget.branch,
+                                project: widget.project,
+                              );
+
+                          assetCodeController.text = code;
+
+                          setState(() {});
+                        },
+
+                        fieldViewBuilder:
+                            (context, controller, focusNode, onFieldSubmitted) {
+                              /// IMPORTANT
+                              autoCompleteController = controller;
+                              return TextField(
+                                controller: controller,
+
+                                focusNode: focusNode,
+
+                                decoration: InputDecoration(
+                                  hintText: 'Search Asset',
+
+                                  prefixIcon: const Icon(Icons.search),
+
+                                  fillColor: AppColors.backgroundWidget,
+
+                                  filled: true,
+
+                                  border: OutlineInputBorder(
+                                    borderSide: BorderSide(
+                                      color: AppColors.primaryColor,
+                                    ),
+
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+
+                                  enabledBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(
+                                      color: AppColors.primaryColor,
+                                    ),
+
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+
+                                  focusedBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(
+                                      color: AppColors.primaryColor,
+                                    ),
+
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 16,
+                                  ),
+                                ),
+                              );
+                            },
+
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+
+                            child: Material(
+                              elevation: 8,
+
+                              borderRadius: BorderRadius.circular(16),
+
+                              child: Container(
+                                width: MediaQuery.of(context).size.width * 0.9,
+
+                                constraints: const BoxConstraints(
+                                  maxHeight: 300,
                                 ),
 
-                                borderRadius: BorderRadius.circular(14),
-                              ),
+                                child: ListView.builder(
+                                  padding: EdgeInsets.zero,
 
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: AppColors.primaryColor,
+                                  itemCount: options.length,
+
+                                  itemBuilder: (context, index) {
+                                    final option = options.elementAt(index);
+
+                                    return InkWell(
+                                      onTap: () {
+                                        onSelected(option);
+                                      },
+
+                                      child: Container(
+                                        padding: const EdgeInsets.all(16),
+
+                                        decoration: const BoxDecoration(
+                                          border: Border(
+                                            bottom: BorderSide(
+                                              color: Colors.black12,
+                                            ),
+                                          ),
+                                        ),
+
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+
+                                          children: [
+                                            Text(
+                                              option.name,
+
+                                              style: const TextStyle(
+                                                fontSize: 18,
+
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+
+                                            const SizedBox(height: 4),
+
+                                            Text(
+                                              option.itemCode,
+
+                                              style: const TextStyle(
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
-
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: AppColors.primaryColor,
-                                ),
-
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 16,
                               ),
                             ),
                           );
                         },
+                      ),
 
-                    optionsViewBuilder: (context, onSelected, options) {
-                      return Align(
-                        alignment: Alignment.topLeft,
+                      const SizedBox(height: 12),
 
-                        child: Material(
-                          elevation: 8,
+                      /// ASSET CODE
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: costController,
 
-                          borderRadius: BorderRadius.circular(16),
-
-                          child: Container(
-                            width: MediaQuery.of(context).size.width * 0.9,
-
-                            constraints: const BoxConstraints(maxHeight: 300),
-
-                            child: ListView.builder(
-                              padding: EdgeInsets.zero,
-
-                              itemCount: options.length,
-
-                              itemBuilder: (context, index) {
-                                final option = options.elementAt(index);
-
-                                return InkWell(
-                                  onTap: () {
-                                    onSelected(option);
-                                  },
-
-                                  child: Container(
-                                    padding: const EdgeInsets.all(16),
-
-                                    decoration: const BoxDecoration(
-                                      border: Border(
-                                        bottom: BorderSide(
-                                          color: Colors.black12,
-                                        ),
-                                      ),
-                                    ),
-
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-
-                                      children: [
-                                        Text(
-                                          option.name,
-
-                                          style: const TextStyle(
-                                            fontSize: 18,
-
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-
-                                        const SizedBox(height: 4),
-
-                                        Text(
-                                          option.itemCode,
-
-                                          style: const TextStyle(
-                                            color: Colors.grey,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
                                   ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
 
-                  const SizedBox(height: 12),
+                              decoration: InputDecoration(
+                                labelText: 'Cost',
 
-                  /// ASSET CODE
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: costController,
+                                fillColor: AppColors.backgroundWidget,
+                                filled: true,
 
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-
-                          decoration: InputDecoration(
-                            labelText: 'Cost',
-
-                            fillColor: AppColors.backgroundWidget,
-                            filled: true,
-
-                            border: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-
-                            enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-
-                            focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: selectedStatus,
-
-                          items: statuses.map((e) {
-                            return DropdownMenuItem(value: e, child: Text(e));
-                          }).toList(),
-
-                          onChanged: (v) {
-                            selectedStatus = v;
-
-                            setState(() {});
-                          },
-
-                          decoration: InputDecoration(
-                            labelText: 'Status',
-                            fillColor: AppColors.backgroundWidget,
-                            filled: true,
-                            border: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  /// STATUS
-                  const SizedBox(height: 12),
-
-                  /// BRAND
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: TextField(
-                          controller: brandController,
-
-                          decoration: InputDecoration(
-                            labelText: 'Brand',
-                            fillColor: AppColors.backgroundWidget,
-                            filled: true,
-                            border: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 5),
-                      Expanded(
-                        child: TextField(
-                          controller: qtyController,
-
-                          keyboardType: TextInputType.number,
-
-                          decoration: InputDecoration(
-                            labelText: 'Quantity',
-
-                            fillColor: AppColors.backgroundWidget,
-                            filled: true,
-                            border: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  /// MODEL
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: modelController,
-
-                          decoration: InputDecoration(
-                            labelText: 'Model',
-
-                            fillColor: AppColors.backgroundWidget,
-                            filled: true,
-                            border: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 5),
-                      Expanded(
-                        child: TextField(
-                          controller: serialController,
-
-                          decoration: InputDecoration(
-                            labelText: 'Serial Number',
-
-                            fillColor: AppColors.backgroundWidget,
-                            filled: true,
-                            border: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color: AppColors.primaryColor,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 12),
-
-                  const SizedBox(height: 12),
-
-                  /// SUBMIT
-                  Row(
-                    children: [
-                      Expanded(
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: 50,
-
-                          child: ElevatedButton.icon(
-                            onPressed: _takePicture,
-
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.secondaryColor,
-                            ),
-
-                            icon: const Icon(
-                              Icons.camera_alt,
-                              color: Colors.white,
-                            ),
-
-                            label: const Text(
-                              'Take Picture',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      SizedBox(width: 5),
-                      Expanded(
-                        child: SizedBox(
-                          width: double.infinity,
-
-                          height: 50,
-
-                          child: BlocBuilder<AssetBloc, AssetState>(
-                            builder: (context, state) {
-                              return ElevatedButton(
-                                onPressed: state.saving ? null : _saveAsset,
-
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primaryColor,
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
                                 ),
 
-                                child: state.saving
-                                    ? const SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : const Text(
-                                        'Submit',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                              );
-                            },
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: selectedStatus,
+
+                              items: statuses.map((e) {
+                                return DropdownMenuItem(
+                                  value: e,
+                                  child: Text(e),
+                                );
+                              }).toList(),
+
+                              onChanged: (v) {
+                                selectedStatus = v;
+
+                                setState(() {});
+                              },
+
+                              decoration: InputDecoration(
+                                labelText: 'Status',
+                                fillColor: AppColors.backgroundWidget,
+                                filled: true,
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      /// STATUS
+                      const SizedBox(height: 12),
+
+                      /// BRAND
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: TextField(
+                              controller: brandController,
+
+                              decoration: InputDecoration(
+                                labelText: 'Brand',
+                                fillColor: AppColors.backgroundWidget,
+                                filled: true,
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 5),
+                          Expanded(
+                            child: TextField(
+                              controller: qtyController,
+
+                              keyboardType: TextInputType.number,
+
+                              decoration: InputDecoration(
+                                labelText: 'Quantity',
+
+                                fillColor: AppColors.backgroundWidget,
+                                filled: true,
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      /// MODEL
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: modelController,
+
+                              decoration: InputDecoration(
+                                labelText: 'Model',
+
+                                fillColor: AppColors.backgroundWidget,
+                                filled: true,
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 5),
+                          Expanded(
+                            child: TextField(
+                              controller: serialController,
+
+                              decoration: InputDecoration(
+                                labelText: 'Serial Number',
+
+                                fillColor: AppColors.backgroundWidget,
+                                filled: true,
+                                border: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.primaryColor,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 12),
+
+                      const SizedBox(height: 12),
+
+                      /// SUBMIT
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 50,
+
+                              child: ElevatedButton.icon(
+                                onPressed: _takePicture,
+
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.secondaryColor,
+                                ),
+
+                                icon: const Icon(
+                                  Icons.camera_alt,
+                                  color: Colors.white,
+                                ),
+
+                                label: const Text(
+                                  'Take Picture',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          SizedBox(width: 5),
+                          Expanded(
+                            child: SizedBox(
+                              width: double.infinity,
+
+                              height: 50,
+
+                              child: BlocBuilder<AssetBloc, AssetState>(
+                                builder: (context, state) {
+                                  return ElevatedButton(
+                                    onPressed: state.saving ? null : _saveAsset,
+
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primaryColor,
+                                    ),
+
+                                    child: state.saving
+                                        ? const SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Text(
+                                            'Submit',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+                      if (selectedImage != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+
+                            child: Image.file(
+                              selectedImage!,
+                              height: 180,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
+                      TextField(
+                        controller: searchController,
+
+                        onChanged: (value) {
+                          setState(() {
+                            searchQuery = value.toLowerCase();
+                          });
+                        },
+
+                        decoration: InputDecoration(
+                          hintText: 'Search Assets',
+
+                          prefixIcon: const Icon(Icons.search),
+
+                          suffixIcon: searchQuery.isNotEmpty
+                              ? IconButton(
+                                  onPressed: () {
+                                    searchController.clear();
+
+                                    setState(() {
+                                      searchQuery = '';
+                                    });
+                                  },
+                                  icon: const Icon(Icons.close),
+                                )
+                              : null,
+
+                          filled: true,
+                          fillColor: AppColors.backgroundWidget,
+
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+
+                            borderSide: BorderSide(
+                              color: AppColors.primaryColor,
+                            ),
+                          ),
+
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+
+                            borderSide: BorderSide(
+                              color: AppColors.primaryColor,
+                            ),
+                          ),
+
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+
+                            borderSide: BorderSide(
+                              color: AppColors.primaryColor,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      /// LOCAL LIST
+                      Expanded(
+                        child: visibleAssets.isEmpty
+                            ? const Center(child: Text('No Local Assets'))
+                            : ListView.builder(
+                                itemCount: visibleAssets.length,
+                                itemBuilder: (_, index) {
+                                  final item = visibleAssets[index];
+                                  return AssetCard(
+                                    item: item,
+
+                                    onDelete: () {
+                                      context.read<AssetBloc>().add(
+                                        DeleteAssetEvent(
+                                          itemCode: item.itemCode,
+
+                                          branch: widget.branch,
+
+                                          project: widget.project,
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 20),
-                  if (selectedImage != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-
-                        child: Image.file(
-                          selectedImage!,
-                          height: 180,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-
-                  /// LOCAL LIST
-                  Expanded(
-                    child: visibleAssets.isEmpty
-                        ? const Center(child: Text('No Local Assets'))
-                        : ListView.builder(
-                            itemCount: visibleAssets.length,
-                            itemBuilder: (_, index) {
-                              final item = visibleAssets[index];
-                              return AssetCard(
-                                item: item,
-
-                                onDelete: () {
-                                  context.read<AssetBloc>().add(
-                                    DeleteAssetEvent(
-                                      itemCode: item.itemCode,
-
-                                      branch: widget.branch,
-
-                                      project: widget.project,
-                                    ),
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            );
-          },
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
