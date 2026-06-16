@@ -65,6 +65,10 @@ class LocalAssetDatasource {
 
             classification: item['classification'],
 
+            assetClassification: item['asset_classification'] ?? '',
+
+            assetInventory: item['asset_inventory'] ?? '',
+
             location: item['location'],
 
             projectName: item['project_name'],
@@ -76,6 +80,16 @@ class LocalAssetDatasource {
             model: item['model'],
 
             serialNo: item['serial_no'],
+
+            description: item['description'] ?? '',
+
+            hasWarranty: item['has_warranty'] ?? false,
+
+            warrantyDescription: item['warranty_description'] ?? '',
+
+            warrantyImagePath: item['warranty_image_path'],
+
+            localWarrantyImagePath: item['local_warranty_image_path'],
 
             isSynced: item['is_synced'] ?? false,
 

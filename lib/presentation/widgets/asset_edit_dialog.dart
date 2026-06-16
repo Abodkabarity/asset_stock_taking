@@ -7,7 +7,7 @@ import 'package:printing/printing.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/services/barcode_print_service.dart';
-import '../../data/models/asset_item_model.dart';
+import '../../core/utils/asset_classification_utils.dart';
 import '../../data/models/asset_stock_model.dart';
 import '../bloc/asset_bloc.dart';
 
@@ -38,13 +38,21 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
   late TextEditingController serialController;
 
-  late String selectedStatus;
+  late TextEditingController descriptionController;
 
-  late AssetItemModel selectedItem;
+  late TextEditingController warrantyDescriptionController;
+
+  late String selectedStatus;
 
   File? selectedImage;
 
   String? selectedImagePath;
+
+  File? selectedWarrantyImage;
+
+  String? selectedWarrantyImagePath;
+
+  late bool hasWarranty;
 
   final statuses = ['New', 'Very Good', 'Good', 'Fair', 'Bad'];
 
@@ -58,20 +66,36 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
     serialController = TextEditingController(text: widget.asset.serialNo);
 
+    descriptionController = TextEditingController(
+      text: widget.asset.description,
+    );
+
+    warrantyDescriptionController = TextEditingController(
+      text: widget.asset.warrantyDescription,
+    );
+
     costController = TextEditingController(text: widget.asset.cost.toString());
 
     selectedStatus = widget.asset.status;
 
-    selectedImagePath = widget.asset.imagePath;
+    selectedImagePath = widget.asset.imagePath ?? widget.asset.localImagePath;
 
-    final items = context.read<AssetBloc>().state.items;
+    selectedWarrantyImagePath =
+        widget.asset.warrantyImagePath ?? widget.asset.localWarrantyImagePath;
 
-    final baseAssetCode = widget.asset.itemCode.split('-').take(2).join('-');
+    hasWarranty = widget.asset.hasWarranty;
+  }
 
-    selectedItem = items.firstWhere(
-      (e) => e.itemCode == baseAssetCode,
-      orElse: () => items.first,
-    );
+  @override
+  void dispose() {
+    brandController.dispose();
+    modelController.dispose();
+    serialController.dispose();
+    descriptionController.dispose();
+    warrantyDescriptionController.dispose();
+    costController.dispose();
+
+    super.dispose();
   }
 
   Future<void> pickImage(ImageSource source) async {
@@ -87,6 +111,19 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
       /// IMPORTANT
       /// LOCAL TEMP IMAGE
       selectedImagePath = image.path;
+    });
+  }
+
+  Future<void> pickWarrantyImage(ImageSource source) async {
+    final picker = ImagePicker();
+
+    final image = await picker.pickImage(source: source, imageQuality: 70);
+
+    if (image == null) return;
+
+    setState(() {
+      selectedWarrantyImage = File(image.path);
+      selectedWarrantyImagePath = image.path;
     });
   }
 
@@ -152,6 +189,59 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                   },
                 ),
 
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> showWarrantyImagePickerOptions() async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 50,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Select Warranty Image',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt, color: Colors.blue),
+                  title: const Text('Take Photo'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await pickWarrantyImage(ImageSource.camera);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library, color: Colors.green),
+                  title: const Text('Choose From Gallery'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await pickWarrantyImage(ImageSource.gallery);
+                  },
+                ),
                 const SizedBox(height: 10),
               ],
             ),
@@ -347,41 +437,6 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
             const SizedBox(height: 20),
 
-            /// NAME
-            TextField(
-              controller: TextEditingController(text: selectedItem.name),
-
-              readOnly: true,
-
-              decoration: InputDecoration(
-                labelText: 'Name',
-
-                filled: true,
-
-                fillColor: AppColors.backgroundWidget,
-
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-
-                  borderSide: BorderSide(color: AppColors.primaryColor),
-                ),
-
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-
-                  borderSide: BorderSide(color: AppColors.primaryColor),
-                ),
-
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-
-                  borderSide: BorderSide(color: AppColors.primaryColor),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
             /// BRAND
             TextField(
               controller: brandController,
@@ -518,6 +573,111 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
             const SizedBox(height: 12),
 
+            /// DESCRIPTION
+            TextField(
+              controller: descriptionController,
+              minLines: 2,
+              maxLines: 4,
+              decoration: InputDecoration(
+                labelText: 'Description',
+                filled: true,
+                fillColor: AppColors.backgroundWidget,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.primaryColor),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            SwitchListTile(
+              value: hasWarranty,
+              contentPadding: EdgeInsets.zero,
+              activeThumbColor: AppColors.primaryColor,
+              title: const Text('Warranty'),
+              onChanged: (value) {
+                setState(() {
+                  hasWarranty = value;
+
+                  if (!hasWarranty) {
+                    warrantyDescriptionController.clear();
+                    selectedWarrantyImage = null;
+                    selectedWarrantyImagePath = null;
+                  }
+                });
+              },
+            ),
+
+            if (hasWarranty) ...[
+              TextField(
+                controller: warrantyDescriptionController,
+                minLines: 2,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  labelText: 'Warranty Details',
+                  filled: true,
+                  fillColor: AppColors.backgroundWidget,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: AppColors.primaryColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: AppColors.primaryColor),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: AppColors.primaryColor),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (selectedWarrantyImagePath != null &&
+                  selectedWarrantyImagePath!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: selectedWarrantyImagePath!.startsWith('http')
+                        ? Image.network(
+                            selectedWarrantyImagePath!,
+                            height: 120,
+                            width: 120,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.file(
+                            File(selectedWarrantyImagePath!),
+                            height: 120,
+                            width: 120,
+                            fit: BoxFit.cover,
+                          ),
+                  ),
+                ),
+              ElevatedButton.icon(
+                onPressed: showWarrantyImagePickerOptions,
+                icon: const Icon(Icons.image, color: Colors.white),
+                label: Text(
+                  selectedWarrantyImagePath == null
+                      ? 'Add Warranty Image'
+                      : 'Change Warranty Image',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.secondaryColor,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
             /// STATUS
             DropdownButtonFormField<String>(
               initialValue: selectedStatus,
@@ -639,29 +799,34 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                   ),
                 ),
 
-                const SizedBox(width: 8),
+                if (AssetClassificationUtils.canPrintBarcode(
+                  widget.asset.assetClassification,
+                )) ...[
+                  const SizedBox(width: 8),
 
-                /// PRINT
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      final pdf = await BarcodePrintService.generateBarcodePdf(
-                        assets: [widget.asset],
-                      );
+                  /// PRINT
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final pdf =
+                            await BarcodePrintService.generateBarcodePdf(
+                              assets: [widget.asset],
+                            );
 
-                      await Printing.layoutPdf(onLayout: (_) async => pdf);
-                    },
+                        await Printing.layoutPdf(onLayout: (_) async => pdf);
+                      },
 
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.secondaryColor,
-                    ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.secondaryColor,
+                      ),
 
-                    child: const Text(
-                      'Print',
-                      style: TextStyle(color: Colors.white),
+                      child: const Text(
+                        'Print',
+                        style: TextStyle(color: Colors.white),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
 
@@ -697,17 +862,21 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                         print('EDIT ID: ${widget.asset.id}');
                         final updated = AssetStockModel(
                           id: widget.asset.id,
-                          name: selectedItem.name,
+                          name: widget.asset.name,
 
                           assetCode: widget.asset.assetCode,
 
                           itemCode: widget.asset.itemCode,
 
-                          category: selectedItem.category,
+                          category: widget.asset.category,
 
-                          subCategory: selectedItem.subCategory,
+                          subCategory: widget.asset.subCategory,
 
-                          classification: selectedItem.classification,
+                          classification: widget.asset.classification,
+
+                          assetClassification: widget.asset.assetClassification,
+
+                          assetInventory: widget.asset.assetInventory,
 
                           location: widget.asset.location,
 
@@ -720,6 +889,28 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                           model: modelController.text,
 
                           serialNo: serialController.text,
+
+                          description: descriptionController.text,
+
+                          hasWarranty: hasWarranty,
+
+                          warrantyDescription: hasWarranty
+                              ? warrantyDescriptionController.text
+                              : '',
+
+                          warrantyImagePath:
+                              hasWarranty &&
+                                  selectedWarrantyImagePath != null &&
+                                  selectedWarrantyImagePath!.startsWith('http')
+                              ? selectedWarrantyImagePath
+                              : null,
+
+                          localWarrantyImagePath:
+                              hasWarranty &&
+                                  selectedWarrantyImagePath != null &&
+                                  !selectedWarrantyImagePath!.startsWith('http')
+                              ? selectedWarrantyImagePath
+                              : null,
 
                           cost: cost,
 

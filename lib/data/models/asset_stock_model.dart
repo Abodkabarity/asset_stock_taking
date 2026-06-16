@@ -15,6 +15,10 @@ class AssetStockModel {
 
   final String classification;
 
+  final String assetClassification;
+
+  final String assetInventory;
+
   final String location;
 
   final String projectName;
@@ -31,6 +35,16 @@ class AssetStockModel {
 
   final String serialNo;
 
+  final String description;
+
+  final bool hasWarranty;
+
+  final String warrantyDescription;
+
+  final String? warrantyImagePath;
+
+  final String? localWarrantyImagePath;
+
   final bool isSynced;
 
   final bool isDeleted;
@@ -46,12 +60,19 @@ class AssetStockModel {
     required this.category,
     required this.subCategory,
     required this.classification,
+    required this.assetClassification,
+    required this.assetInventory,
     required this.location,
     required this.projectName,
     required this.status,
     required this.brand,
     required this.model,
     required this.serialNo,
+    this.description = '',
+    this.hasWarranty = false,
+    this.warrantyDescription = '',
+    this.warrantyImagePath,
+    this.localWarrantyImagePath,
     required this.createdAt,
     this.isSynced = false,
     this.isDeleted = false,
@@ -72,12 +93,19 @@ class AssetStockModel {
       'category': category,
       'sub_category': subCategory,
       'classification': classification,
+      'asset_classification': assetClassification,
+      'asset_inventory': assetInventory,
       'location': location,
       'project_name': projectName,
       'status': status,
       'brand': brand,
       'model': model,
       'serial_no': serialNo,
+      'description': description,
+      'has_warranty': hasWarranty,
+      'warranty_description': warrantyDescription,
+      'warranty_image_path': warrantyImagePath,
+      'local_warranty_image_path': localWarrantyImagePath,
       'is_synced': isSynced,
       'is_deleted': isDeleted,
       'image_path': imagePath,
@@ -106,6 +134,10 @@ class AssetStockModel {
 
       classification: json['classification']?.toString() ?? '',
 
+      assetClassification: json['asset_classification']?.toString() ?? '',
+
+      assetInventory: json['asset_inventory']?.toString() ?? '',
+
       location: json['location']?.toString() ?? '',
 
       projectName: json['project_name']?.toString() ?? '',
@@ -121,6 +153,16 @@ class AssetStockModel {
       localImagePath: json['local_image_path']?.toString(),
 
       serialNo: json['serial_no']?.toString() ?? '',
+
+      description: json['description']?.toString() ?? '',
+
+      hasWarranty: json['has_warranty'] ?? false,
+
+      warrantyDescription: json['warranty_description']?.toString() ?? '',
+
+      warrantyImagePath: json['warranty_image_path']?.toString(),
+
+      localWarrantyImagePath: json['local_warranty_image_path']?.toString(),
 
       isSynced: json['is_synced'] ?? false,
 
@@ -149,6 +191,11 @@ class AssetStockModel {
     DateTime? createdAt,
     double? cost,
     String? localImagePath,
+    String? description,
+    bool? hasWarranty,
+    String? warrantyDescription,
+    String? warrantyImagePath,
+    String? localWarrantyImagePath,
   }) {
     return AssetStockModel(
       id: id ?? this.id,
@@ -167,6 +214,10 @@ class AssetStockModel {
 
       classification: classification,
 
+      assetClassification: assetClassification,
+
+      assetInventory: assetInventory,
+
       location: location,
 
       projectName: projectName,
@@ -178,6 +229,17 @@ class AssetStockModel {
       model: model,
 
       serialNo: serialNo,
+
+      description: description ?? this.description,
+
+      hasWarranty: hasWarranty ?? this.hasWarranty,
+
+      warrantyDescription: warrantyDescription ?? this.warrantyDescription,
+
+      warrantyImagePath: warrantyImagePath ?? this.warrantyImagePath,
+
+      localWarrantyImagePath:
+          localWarrantyImagePath ?? this.localWarrantyImagePath,
 
       isSynced: isSynced ?? this.isSynced,
 

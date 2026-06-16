@@ -1,4 +1,6 @@
 import 'package:asset_stock_taking/presentation/pages/select_branch_page.dart';
+import 'package:asset_stock_taking/presentation/pages/web_asset_dashboard_page.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -38,7 +40,7 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
 
-        home: const SelectBranchPage(),
+        home: kIsWeb ? const WebAssetDashboardPage() : const SelectBranchPage(),
       ),
     );
   }

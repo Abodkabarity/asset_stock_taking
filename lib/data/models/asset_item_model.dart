@@ -9,6 +9,10 @@ class AssetItemModel {
 
   final String classification;
 
+  final String assetClassification;
+
+  final String assetInventory;
+
   AssetItemModel({
     required this.name,
 
@@ -19,6 +23,10 @@ class AssetItemModel {
     required this.subCategory,
 
     required this.classification,
+
+    required this.assetClassification,
+
+    required this.assetInventory,
   });
 
   factory AssetItemModel.fromJson(Map<String, dynamic> json) {
@@ -32,6 +40,10 @@ class AssetItemModel {
       subCategory: json['sub_category'] ?? '',
 
       classification: json['classification'] ?? '',
+
+      assetClassification: json['asset_classification'] ?? '',
+
+      assetInventory: json['asset_inventory'] ?? '',
     );
   }
 
@@ -46,6 +58,10 @@ class AssetItemModel {
       'sub_category': subCategory,
 
       'classification': classification,
+
+      'asset_classification': assetClassification,
+
+      'asset_inventory': assetInventory,
     };
   }
 }

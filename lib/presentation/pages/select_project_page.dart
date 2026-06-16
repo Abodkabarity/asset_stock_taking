@@ -5,6 +5,7 @@ import 'package:printing/printing.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/asset_excel_service.dart';
 import '../../core/services/barcode_print_service.dart';
+import '../../core/utils/asset_classification_utils.dart';
 import '../../domain/repositories/asset_repository.dart';
 import '../../injection_container.dart';
 import '../bloc/asset_bloc.dart';
@@ -188,8 +189,19 @@ class _SelectProjectPageState extends State<SelectProjectPage> {
               final classifications = await sl
                   .get<AssetRepository>()
                   .getClassifications(widget.branch);
+              final printableClassifications = classifications
+                  .where(AssetClassificationUtils.canPrintBarcode)
+                  .toList();
 
               if (!context.mounted) return;
+
+              if (printableClassifications.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('No Printable Assets Found')),
+                );
+
+                return;
+              }
 
               String? selectedClassification;
 
@@ -200,13 +212,13 @@ class _SelectProjectPageState extends State<SelectProjectPage> {
                 builder: (_) {
                   return AlertDialog(
                     backgroundColor: Colors.white,
-                    title: const Text('Select Classification'),
+                    title: const Text('Select Asset Classification'),
 
                     content: DropdownButtonFormField<String>(
                       initialValue: selectedClassification,
 
                       decoration: InputDecoration(
-                        labelText: 'Classification',
+                        labelText: 'Asset Classification',
 
                         filled: true,
                         fillColor: AppColors.backgroundWidget,
@@ -227,7 +239,7 @@ class _SelectProjectPageState extends State<SelectProjectPage> {
                         ),
                       ),
 
-                      items: classifications.map((e) {
+                      items: printableClassifications.map((e) {
                         return DropdownMenuItem(value: e, child: Text(e));
                       }).toList(),
 

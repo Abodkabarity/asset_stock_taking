@@ -41,12 +41,18 @@ class AssetRemoteDatasource {
         'category': item.category,
         'sub_category': item.subCategory,
         'classification': item.classification,
+        'asset_classification': item.assetClassification,
+        'asset_inventory': item.assetInventory,
         'location': item.location,
         'project_name': item.projectName,
         'status': item.status,
         'brand': item.brand,
         'model': item.model,
         'serial_no': item.serialNo,
+        'description': item.description,
+        'has_warranty': item.hasWarranty,
+        'warranty_description': item.warrantyDescription,
+        'warranty_image_path': item.warrantyImagePath,
         'image_path': item.imagePath,
         'cost': item.cost,
         'created_at': item.createdAt.toIso8601String(),
@@ -75,6 +81,7 @@ class AssetRemoteDatasource {
     for (final e in items.where((e) => !e.isDeleted)) {
       print('UPSERT ITEM: ${e.itemCode}');
       String? imageUrl = e.imagePath;
+      String? warrantyImageUrl = e.warrantyImagePath;
 
       /// =========================
       /// UPLOAD LOCAL IMAGE
@@ -114,6 +121,41 @@ class AssetRemoteDatasource {
       }
 
       /// =========================
+      /// UPLOAD LOCAL WARRANTY IMAGE
+      /// =========================
+      if (e.localWarrantyImagePath != null &&
+          e.localWarrantyImagePath!.isNotEmpty &&
+          !e.localWarrantyImagePath!.startsWith('http')) {
+        try {
+          final file = File(e.localWarrantyImagePath!);
+
+          if (file.existsSync()) {
+            final fileName =
+                '${DateTime.now().millisecondsSinceEpoch}_${e.itemCode}_warranty.jpg';
+
+            final storagePath = 'assets/$fileName';
+
+            await supabase.storage
+                .from('asset-images')
+                .upload(
+                  storagePath,
+                  file,
+                  fileOptions: const FileOptions(upsert: true),
+                );
+
+            warrantyImageUrl = supabase.storage
+                .from('asset-images')
+                .getPublicUrl(storagePath);
+
+            print('WARRANTY IMAGE UPLOADED: $warrantyImageUrl');
+          }
+        } catch (err) {
+          print('WARRANTY IMAGE UPLOAD ERROR');
+          print(err);
+        }
+      }
+
+      /// =========================
       /// ADD TO UPSERT LIST
       /// =========================
       final Map<String, dynamic> row = {
@@ -129,6 +171,10 @@ class AssetRemoteDatasource {
 
         'classification': e.classification,
 
+        'asset_classification': e.assetClassification,
+
+        'asset_inventory': e.assetInventory,
+
         'location': e.location,
 
         'project_name': e.projectName,
@@ -140,6 +186,14 @@ class AssetRemoteDatasource {
         'model': e.model,
 
         'serial_no': e.serialNo,
+
+        'description': e.description,
+
+        'has_warranty': e.hasWarranty,
+
+        'warranty_description': e.warrantyDescription,
+
+        'warranty_image_path': warrantyImageUrl,
 
         'image_path': imageUrl,
 
@@ -231,11 +285,12 @@ class AssetRemoteDatasource {
   Future<List<String>> getClassifications(String branch) async {
     final response = await supabase
         .from('asset_stock_taking')
-        .select('classification')
+        .select('asset_classification')
         .eq('location', branch);
 
     final list = response
-        .map<String>((e) => e['classification'].toString())
+        .map<String>((e) => e['asset_classification'].toString())
+        .where((e) => e.trim().isNotEmpty)
         .toSet()
         .toList();
 
@@ -252,7 +307,7 @@ class AssetRemoteDatasource {
         .from('asset_stock_taking')
         .select()
         .eq('location', branch)
-        .eq('classification', classification)
+        .eq('asset_classification', classification)
         .order('item_code');
 
     return response

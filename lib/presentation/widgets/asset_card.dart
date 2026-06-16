@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/asset_classification_utils.dart';
 import '../../data/models/asset_stock_model.dart';
 import '../bloc/asset_bloc.dart';
 import 'asset_edit_dialog.dart';
@@ -15,7 +16,7 @@ class AssetCard extends StatelessWidget {
 
   const AssetCard({super.key, required this.item, required this.onDelete});
   Color getClassificationColor(String classification) {
-    switch (classification.toLowerCase()) {
+    switch (classification.trim().toLowerCase()) {
       case 'public':
         return Colors.green;
 
@@ -23,7 +24,7 @@ class AssetCard extends StatelessWidget {
         return Colors.lightBlue;
 
       case 'confidential':
-        return Colors.orange;
+        return Colors.amber;
 
       default:
         return Colors.grey;
@@ -179,6 +180,29 @@ class AssetCard extends StatelessWidget {
                   Text.rich(
                     TextSpan(
                       children: [
+                        const TextSpan(text: 'Asset Classification: '),
+                        TextSpan(
+                          text: item.assetClassification.isEmpty
+                              ? '-'
+                              : item.assetClassification,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color:
+                                AssetClassificationUtils.canPrintBarcode(
+                                  item.assetClassification,
+                                )
+                                ? AppColors.primaryColor
+                                : Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+
+                  Text.rich(
+                    TextSpan(
+                      children: [
                         const TextSpan(text: 'Item Code: '),
 
                         TextSpan(
@@ -234,6 +258,41 @@ class AssetCard extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (item.description.trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      width: MediaQuery.of(context).size.width * 0.72,
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            const TextSpan(text: 'Description: '),
+                            TextSpan(
+                              text: item.description,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (item.hasWarranty) ...[
+                    const SizedBox(height: 6),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          const TextSpan(text: 'Warranty: '),
+                          TextSpan(
+                            text: item.warrantyDescription.trim().isEmpty
+                                ? 'Yes'
+                                : item.warrantyDescription,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],

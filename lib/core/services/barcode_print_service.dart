@@ -4,6 +4,7 @@ import 'package:barcode/barcode.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../utils/asset_classification_utils.dart';
 import '../../data/models/asset_stock_model.dart';
 
 class BarcodePrintService {
@@ -12,13 +13,22 @@ class BarcodePrintService {
   }) async {
     final pdf = pw.Document();
     final barcode = Barcode.code128();
+    final printableAssets = assets.where((asset) {
+      return AssetClassificationUtils.canPrintBarcode(
+        asset.assetClassification,
+      );
+    }).toList();
+
+    if (printableAssets.isEmpty) {
+      throw ArgumentError('No printable assets found.');
+    }
 
     const double width = 5.0 * PdfPageFormat.cm;
     const double height = 2.5 * PdfPageFormat.cm;
 
     final customFormat = PdfPageFormat(width, height, marginAll: 0);
 
-    for (final asset in assets) {
+    for (final asset in printableAssets) {
       final svg = barcode.toSvg(asset.itemCode, drawText: false);
 
       pdf.addPage(

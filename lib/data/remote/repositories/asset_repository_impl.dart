@@ -166,11 +166,17 @@ class AssetRepositoryImpl implements AssetRepository {
 
   @override
   Future<List<AssetItemModel>> syncMaster() async {
-    final lastSync = localMasterDatasource.getLastSync();
+    final current = localMasterDatasource.getMaster();
+    final needsAssetClassificationRefresh = current.any(
+      (e) =>
+          e.assetClassification.trim().isEmpty ||
+          e.assetInventory.trim().isEmpty,
+    );
+    final lastSync = needsAssetClassificationRefresh
+        ? null
+        : localMasterDatasource.getLastSync();
 
     final updated = await remoteDatasource.getUpdatedMaster(lastSync);
-
-    final current = localMasterDatasource.getMaster();
 
     final map = {for (var e in current) e.itemCode: e};
 

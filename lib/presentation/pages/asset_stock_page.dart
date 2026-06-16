@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/asset_excel_service.dart';
 import '../../core/services/barcode_print_service.dart';
+import '../../core/utils/asset_classification_utils.dart';
 import '../../data/models/asset_item_model.dart';
 import '../../data/models/asset_stock_model.dart';
 import '../bloc/asset_bloc.dart';
@@ -42,10 +43,14 @@ class _AssetStockPageState extends State<AssetStockPage> {
   final serialController = TextEditingController();
   final costController = TextEditingController();
   final qtyController = TextEditingController();
+  final descriptionController = TextEditingController();
+  final warrantyDescriptionController = TextEditingController();
 
   AssetItemModel? selectedItem;
   File? selectedImage;
+  File? selectedWarrantyImage;
   String? selectedStatus;
+  bool hasWarranty = false;
 
   final statuses = ['New', 'Good', 'Bad'];
 
@@ -58,6 +63,8 @@ class _AssetStockPageState extends State<AssetStockPage> {
     modelController.dispose();
     costController.dispose();
     serialController.dispose();
+    descriptionController.dispose();
+    warrantyDescriptionController.dispose();
 
     qtyController.dispose();
 
@@ -116,6 +123,10 @@ class _AssetStockPageState extends State<AssetStockPage> {
 
         classification: selectedItem!.classification,
 
+        assetClassification: selectedItem!.assetClassification,
+
+        assetInventory: selectedItem!.assetInventory,
+
         location: widget.branch,
 
         projectName: widget.project,
@@ -127,6 +138,20 @@ class _AssetStockPageState extends State<AssetStockPage> {
         model: modelController.text,
 
         serialNo: serialController.text,
+
+        description: descriptionController.text,
+
+        hasWarranty: hasWarranty,
+
+        warrantyDescription: hasWarranty
+            ? warrantyDescriptionController.text
+            : '',
+
+        warrantyImagePath: null,
+
+        localWarrantyImagePath: hasWarranty
+            ? selectedWarrantyImage?.path
+            : null,
 
         imagePath: null,
         localImagePath: selectedImage?.path,
@@ -176,11 +201,15 @@ class _AssetStockPageState extends State<AssetStockPage> {
 
     qtyController.clear();
     costController.clear();
+    descriptionController.clear();
+    warrantyDescriptionController.clear();
     selectedItem = null;
 
     selectedStatus = null;
 
     selectedImage = null;
+    selectedWarrantyImage = null;
+    hasWarranty = false;
 
     setState(() {});
   }
@@ -204,6 +233,30 @@ class _AssetStockPageState extends State<AssetStockPage> {
     final savedImage = await File(image.path).copy('${dir.path}/$fileName.jpg');
 
     selectedImage = savedImage;
+
+    setState(() {});
+  }
+
+  Future<void> _takeWarrantyPicture() async {
+    final picker = ImagePicker();
+
+    final image = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 70,
+    );
+
+    if (image == null) {
+      return;
+    }
+
+    final dir = await getApplicationDocumentsDirectory();
+
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}_warranty'
+        .toString();
+
+    final savedImage = await File(image.path).copy('${dir.path}/$fileName.jpg');
+
+    selectedWarrantyImage = savedImage;
 
     setState(() {});
   }
@@ -283,7 +336,8 @@ class _AssetStockPageState extends State<AssetStockPage> {
 
               /// CLASSIFICATIONS
               final classifications = onlineAssets
-                  .map((e) => e.classification)
+                  .map((e) => e.assetClassification)
+                  .where(AssetClassificationUtils.canPrintBarcode)
                   .toSet()
                   .toList();
 
@@ -305,13 +359,13 @@ class _AssetStockPageState extends State<AssetStockPage> {
                 builder: (_) {
                   return AlertDialog(
                     backgroundColor: Colors.white,
-                    title: const Text('Select Classification'),
+                    title: const Text('Select Asset Classification'),
 
                     content: DropdownButtonFormField<String>(
                       initialValue: selectedClassification,
 
                       decoration: InputDecoration(
-                        labelText: 'Classification',
+                        labelText: 'Asset Classification',
 
                         filled: true,
                         fillColor: AppColors.backgroundWidget,
@@ -382,7 +436,11 @@ class _AssetStockPageState extends State<AssetStockPage> {
               /// FILTER ONLINE ONLY
               /// =========================
               final filtered = onlineAssets.where((e) {
-                return e.classification.toLowerCase() == result.toLowerCase();
+                return e.assetClassification.toLowerCase() ==
+                        result.toLowerCase() &&
+                    AssetClassificationUtils.canPrintBarcode(
+                      e.assetClassification,
+                    );
               }).toList();
 
               if (filtered.isEmpty) {
@@ -545,6 +603,7 @@ class _AssetStockPageState extends State<AssetStockPage> {
                       e.category.toLowerCase().contains(search) ||
                       e.subCategory.toLowerCase().contains(search) ||
                       e.classification.toLowerCase().contains(search) ||
+                      e.assetClassification.toLowerCase().contains(search) ||
                       e.status.toLowerCase().contains(search);
                 }).toList();
 
@@ -589,7 +648,12 @@ class _AssetStockPageState extends State<AssetStockPage> {
                             return item.name.toLowerCase().contains(search) ||
                                 item.itemCode.toLowerCase().contains(search) ||
                                 item.category.toLowerCase().contains(search) ||
-                                item.subCategory.toLowerCase().contains(search);
+                                item.subCategory.toLowerCase().contains(
+                                  search,
+                                ) ||
+                                item.assetClassification.toLowerCase().contains(
+                                  search,
+                                );
                           });
                         },
 
@@ -965,6 +1029,123 @@ class _AssetStockPageState extends State<AssetStockPage> {
                         ],
                       ),
                       SizedBox(height: 12),
+
+                      TextField(
+                        controller: descriptionController,
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: InputDecoration(
+                          labelText: 'Description',
+                          fillColor: AppColors.backgroundWidget,
+                          filled: true,
+                          border: OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color: AppColors.primaryColor,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color: AppColors.primaryColor,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color: AppColors.primaryColor,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      SwitchListTile(
+                        value: hasWarranty,
+                        contentPadding: EdgeInsets.zero,
+                        activeThumbColor: AppColors.primaryColor,
+                        title: const Text('Warranty'),
+                        onChanged: (value) {
+                          setState(() {
+                            hasWarranty = value;
+
+                            if (!hasWarranty) {
+                              warrantyDescriptionController.clear();
+                              selectedWarrantyImage = null;
+                            }
+                          });
+                        },
+                      ),
+
+                      if (hasWarranty) ...[
+                        TextField(
+                          controller: warrantyDescriptionController,
+                          minLines: 2,
+                          maxLines: 4,
+                          decoration: InputDecoration(
+                            labelText: 'Warranty Details',
+                            fillColor: AppColors.backgroundWidget,
+                            filled: true,
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide(
+                                color: AppColors.primaryColor,
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: BorderSide(
+                                color: AppColors.primaryColor,
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: BorderSide(
+                                color: AppColors.primaryColor,
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            onPressed: _takeWarrantyPicture,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.secondaryColor,
+                            ),
+                            icon: const Icon(
+                              Icons.camera_alt,
+                              color: Colors.white,
+                            ),
+                            label: Text(
+                              selectedWarrantyImage == null
+                                  ? 'Take Warranty Picture'
+                                  : 'Change Warranty Picture',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (selectedWarrantyImage != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.file(
+                                selectedWarrantyImage!,
+                                height: 140,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                      ],
 
                       const SizedBox(height: 12),
 
