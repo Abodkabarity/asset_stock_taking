@@ -253,10 +253,6 @@ class _MoreActionsButton extends StatelessWidget {
     String branch = branches.contains(asset.location)
         ? asset.location
         : (branches.isEmpty ? asset.location : branches.first);
-    var projects = await repository.getProjects(branch);
-    String? project = projects.contains(asset.projectName)
-        ? asset.projectName
-        : (projects.isEmpty ? null : projects.first);
 
     if (!context.mounted) return;
 
@@ -296,7 +292,7 @@ class _MoreActionsButton extends StatelessWidget {
                           child: _TransferBox(
                             title: 'To',
                             branch: branch,
-                            project: project ?? '-',
+                            project: branch,
                           ),
                         ),
                       ],
@@ -313,29 +309,10 @@ class _MoreActionsButton extends StatelessWidget {
                       }).toList(),
                       onChanged: (value) async {
                         if (value == null) return;
-                        final loadedProjects = await repository.getProjects(
-                          value,
-                        );
                         setDialogState(() {
                           branch = value;
-                          projects = loadedProjects;
-                          project = loadedProjects.isEmpty
-                              ? null
-                              : loadedProjects.first;
                         });
                       },
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: project,
-                      decoration: const InputDecoration(
-                        labelText: 'To Project',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: projects.map((item) {
-                        return DropdownMenuItem(value: item, child: Text(item));
-                      }).toList(),
-                      onChanged: (value) => project = value,
                     ),
                   ],
                 ),
@@ -346,9 +323,7 @@ class _MoreActionsButton extends StatelessWidget {
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: project == null
-                      ? null
-                      : () => Navigator.pop(context, true),
+                  onPressed: () => Navigator.pop(context, true),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryColor,
                     foregroundColor: Colors.white,
@@ -362,12 +337,20 @@ class _MoreActionsButton extends StatelessWidget {
       },
     );
 
-    if (result != true || project == null) return;
+    if (result != true) return;
 
     await repository.transferAsset(
       itemCode: asset.itemCode,
       branch: branch,
-      project: project!,
+      project: branch,
+    );
+    await repository.addActivityLog(
+      itemCode: asset.itemCode,
+      action: 'transfer',
+      description: 'Transferred from ${asset.location} to $branch',
+      fromBranch: asset.location,
+      toBranch: branch,
+      metadata: {'previous_project': asset.projectName},
     );
 
     if (!context.mounted) return;

@@ -11,7 +11,15 @@ import '../web/pages/web_asset_add_page.dart';
 import '../web/utils/web_asset_colors.dart';
 import '../web/widgets/web_asset_quick_view_dialog.dart';
 
-enum WebAssetSection { dashboard, assets, transfer, dispose, maintenance }
+enum WebAssetSection {
+  dashboard,
+  alerts,
+  assets,
+  inventory,
+  transfer,
+  dispose,
+  maintenance,
+}
 
 class WebAssetDashboardPage extends StatefulWidget {
   final WebAssetSection initialSection;
@@ -28,12 +36,27 @@ class WebAssetDashboardPage extends StatefulWidget {
 class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   final webRepository = WebAssetRepository();
   final searchController = TextEditingController();
+  final maintenanceTitleController = TextEditingController();
+  final maintenanceDetailsController = TextEditingController();
+  final maintenanceDueDateController = TextEditingController();
+  final maintenanceCompletedDateController = TextEditingController();
+  final maintenanceByController = TextEditingController();
+  final maintenanceCostController = TextEditingController();
+  final disposeDateController = TextEditingController();
+  final disposeToController = TextEditingController();
+  final disposeNotesController = TextEditingController();
 
   late WebAssetSection selectedSection;
   List<AssetStockModel> assets = [];
   List<String> branches = [];
+  List<Map<String, dynamic>> maintenanceAlerts = [];
+  List<Map<String, dynamic>> maintenanceRecords = [];
   String? selectedBranch;
   String searchQuery = '';
+  DateTime alertMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  AssetStockModel? selectedMaintenanceAsset;
+  String maintenanceStatus = 'Open';
+  bool maintenanceRepeating = false;
   bool loading = true;
 
   @override
@@ -46,6 +69,15 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   @override
   void dispose() {
     searchController.dispose();
+    maintenanceTitleController.dispose();
+    maintenanceDetailsController.dispose();
+    maintenanceDueDateController.dispose();
+    maintenanceCompletedDateController.dispose();
+    maintenanceByController.dispose();
+    maintenanceCostController.dispose();
+    disposeDateController.dispose();
+    disposeToController.dispose();
+    disposeNotesController.dispose();
     super.dispose();
   }
 
@@ -56,6 +88,8 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
 
     branches = await webRepository.getBranches();
     assets = await webRepository.getAssets();
+    maintenanceAlerts = await webRepository.getMaintenanceAlertsWithinDays();
+    maintenanceRecords = await webRepository.getMaintenanceRecords();
 
     setState(() {
       loading = false;
@@ -66,19 +100,44 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     final search = searchQuery.trim().toLowerCase();
 
     return assets.where((asset) {
-      final matchesBranch =
-          selectedBranch == null || asset.location == selectedBranch;
-      final matchesSearch =
-          search.isEmpty ||
-          asset.name.toLowerCase().contains(search) ||
-          asset.itemCode.toLowerCase().contains(search) ||
-          asset.category.toLowerCase().contains(search) ||
-          asset.subCategory.toLowerCase().contains(search) ||
-          asset.brand.toLowerCase().contains(search) ||
-          asset.status.toLowerCase().contains(search);
-
-      return matchesBranch && matchesSearch;
+      return _matchesBranchAndSearch(asset, search) && _isRegularAsset(asset);
     }).toList();
+  }
+
+  List<AssetStockModel> get visibleInventoryAssets {
+    final search = searchQuery.trim().toLowerCase();
+
+    return assets.where((asset) {
+      return _matchesBranchAndSearch(asset, search) && _isInventoryAsset(asset);
+    }).toList();
+  }
+
+  bool _matchesBranchAndSearch(AssetStockModel asset, String search) {
+    final matchesBranch =
+        selectedBranch == null || asset.location == selectedBranch;
+    return matchesBranch && _matchesSearch(asset, search);
+  }
+
+  bool _matchesSearch(AssetStockModel asset, String search) {
+    return search.isEmpty ||
+        asset.name.toLowerCase().contains(search) ||
+        asset.itemCode.toLowerCase().contains(search) ||
+        asset.category.toLowerCase().contains(search) ||
+        asset.subCategory.toLowerCase().contains(search) ||
+        asset.brand.toLowerCase().contains(search) ||
+        asset.status.toLowerCase().contains(search) ||
+        asset.assetInventory.toLowerCase().contains(search);
+  }
+
+  bool _isInventoryAsset(AssetStockModel asset) {
+    return asset.assetInventory.trim().toLowerCase() == 'inventory';
+  }
+
+  bool _isRegularAsset(AssetStockModel asset) {
+    final status = asset.status.trim().toLowerCase();
+    return status != 'disposed' &&
+        status != 'maintenance' &&
+        !_isInventoryAsset(asset);
   }
 
   double get totalValue {
@@ -86,25 +145,27 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   int get activeCount {
-    return visibleAssets.where((asset) {
-      return asset.status.toLowerCase() != 'disposed';
-    }).length;
+    return visibleAssets.length;
   }
 
   int get disposedCount {
-    return visibleAssets.where((asset) {
-      return asset.status.toLowerCase() == 'disposed';
+    return assets.where((asset) {
+      final search = searchQuery.trim().toLowerCase();
+      return _matchesBranchAndSearch(asset, search) &&
+          asset.status.toLowerCase() == 'disposed';
     }).length;
   }
 
   int get maintenanceCount {
-    return visibleAssets.where((asset) {
-      return asset.status.toLowerCase() == 'maintenance';
+    return assets.where((asset) {
+      final search = searchQuery.trim().toLowerCase();
+      return _matchesBranchAndSearch(asset, search) &&
+          asset.status.toLowerCase() == 'maintenance';
     }).length;
   }
 
-  Future<List<String>> _loadProjects(String branch) async {
-    return webRepository.getProjects(branch);
+  int get alertCount {
+    return maintenanceAlerts.length;
   }
 
   Future<void> _addAsset() async {
@@ -234,10 +295,6 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
 
   Future<void> _transferAsset(AssetStockModel asset) async {
     String branch = selectedBranch ?? asset.location;
-    List<String> projects = await _loadProjects(branch);
-    String? project = projects.contains(asset.projectName)
-        ? asset.projectName
-        : (projects.isEmpty ? null : projects.first);
 
     if (!mounted) return;
 
@@ -274,7 +331,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                           child: _TransferInfoBox(
                             title: 'To',
                             branch: branch,
-                            project: project ?? '-',
+                            project: branch,
                             color: AppColors.primaryColor,
                           ),
                         ),
@@ -290,26 +347,8 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                       onChanged: (value) async {
                         if (value == null) return;
 
-                        final loadedProjects = await _loadProjects(value);
                         setDialogState(() {
                           branch = value;
-                          projects = loadedProjects;
-                          project = loadedProjects.isEmpty
-                              ? null
-                              : loadedProjects.first;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    DropdownButtonFormField<String>(
-                      initialValue: project,
-                      decoration: _inputDecoration('Project'),
-                      items: projects.map((item) {
-                        return DropdownMenuItem(value: item, child: Text(item));
-                      }).toList(),
-                      onChanged: (value) {
-                        setDialogState(() {
-                          project = value;
                         });
                       },
                     ),
@@ -322,9 +361,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton.icon(
-                  onPressed: project == null
-                      ? null
-                      : () => Navigator.pop(context, true),
+                  onPressed: () => Navigator.pop(context, true),
                   icon: const Icon(Icons.swap_horiz, color: Colors.white),
                   label: const Text(
                     'Transfer',
@@ -341,172 +378,409 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       },
     );
 
-    final targetProject = project;
-
-    if (result != true || targetProject == null) return;
+    if (result != true) return;
 
     await webRepository.transferAsset(
       itemCode: asset.itemCode,
       branch: branch,
-      project: targetProject,
+      project: branch,
+    );
+    await webRepository.addActivityLog(
+      itemCode: asset.itemCode,
+      action: 'transfer',
+      description: 'Transferred from ${asset.location} to $branch',
+      fromBranch: asset.location,
+      toBranch: branch,
+      metadata: {'previous_project': asset.projectName},
     );
 
     await _loadData();
   }
 
   Future<void> _disposeAsset(AssetStockModel asset) async {
-    final disposeToController = TextEditingController();
-    final notesController = TextEditingController();
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text('Dispose Asset'),
-          content: SizedBox(
-            width: 560,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _DialogAssetHeader(asset: asset),
-                const SizedBox(height: 18),
-                TextField(
-                  controller: disposeToController,
-                  decoration: _inputDecoration('Dispose To'),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: notesController,
-                  minLines: 3,
-                  maxLines: 4,
-                  decoration: _inputDecoration('Notes'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton.icon(
-              onPressed: () => Navigator.pop(context, true),
-              icon: const Icon(Icons.delete_outline, color: Colors.white),
-              label: const Text(
-                'Dispose',
-                style: TextStyle(color: Colors.white),
-              ),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (result != true) return;
-
     await webRepository.updateStatus(
       itemCode: asset.itemCode,
       status: 'Disposed',
     );
-
-    disposeToController.dispose();
-    notesController.dispose();
+    await webRepository.addActivityLog(
+      itemCode: asset.itemCode,
+      action: 'dispose',
+      description: disposeNotesController.text.isEmpty
+          ? 'Disposed asset'
+          : disposeNotesController.text,
+      fromBranch: asset.location,
+      toBranch: asset.location,
+      metadata: {
+        'dispose_to': disposeToController.text,
+        'disposed_date': disposeDateController.text,
+      },
+    );
 
     await _loadData();
   }
 
   Future<void> _maintenanceAsset(AssetStockModel asset) async {
-    final titleController = TextEditingController();
-    final detailsController = TextEditingController();
-    final costController = TextEditingController();
-    String maintenanceStatus = 'Open';
+    final cost =
+        double.tryParse(maintenanceCostController.text.replaceAll(',', '')) ??
+        0;
 
-    final result = await showDialog<bool>(
+    await webRepository.addMaintenanceRecord(
+      asset: asset,
+      title: maintenanceTitleController.text,
+      details: maintenanceDetailsController.text,
+      maintenanceStatus: maintenanceStatus,
+      dueDate: maintenanceDueDateController.text,
+      completedDate: maintenanceCompletedDateController.text,
+      maintenanceBy: maintenanceByController.text,
+      cost: cost,
+      repeating: maintenanceRepeating,
+    );
+    await webRepository.updateStatus(
+      itemCode: asset.itemCode,
+      status: 'Maintenance',
+    );
+    await webRepository.addActivityLog(
+      itemCode: asset.itemCode,
+      action: 'maintenance',
+      description: maintenanceTitleController.text.isEmpty
+          ? 'Maintenance added'
+          : maintenanceTitleController.text,
+      fromBranch: asset.location,
+      toBranch: asset.location,
+      metadata: {
+        'status': maintenanceStatus,
+        'due_date': maintenanceDueDateController.text,
+        'completed_date': maintenanceCompletedDateController.text,
+        'cost': cost,
+        'repeating': maintenanceRepeating,
+      },
+    );
+
+    maintenanceTitleController.clear();
+    maintenanceDetailsController.clear();
+    maintenanceDueDateController.clear();
+    maintenanceCompletedDateController.clear();
+    maintenanceByController.clear();
+    maintenanceCostController.clear();
+    setState(() {
+      selectedMaintenanceAsset = null;
+      maintenanceStatus = 'Open';
+      maintenanceRepeating = false;
+    });
+
+    await _loadData();
+  }
+
+  void _resetDisposeForm() {
+    disposeDateController.clear();
+    disposeToController.clear();
+    disposeNotesController.clear();
+  }
+
+  Future<void> _openDisposeAssetPicker() async {
+    final picked = await showDialog<AssetStockModel>(
       context: context,
       builder: (context) {
+        var dialogBranch = selectedBranch;
+        var dialogSearch = '';
+
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final filtered = assets.where((asset) {
+              final search = dialogSearch.trim().toLowerCase();
+              return _matchesSearch(asset, search) &&
+                  _isRegularAsset(asset) &&
+                  (dialogBranch == null || asset.location == dialogBranch);
+            }).toList();
+
             return AlertDialog(
               backgroundColor: Colors.white,
-              title: const Text('Maintenance'),
+              titlePadding: const EdgeInsets.fromLTRB(24, 20, 16, 8),
+              contentPadding: const EdgeInsets.fromLTRB(24, 10, 24, 18),
+              actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              title: Row(
+                children: [
+                  const Expanded(child: Text('Select Assets')),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
               content: SizedBox(
-                width: 640,
+                width: 900,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _DialogAssetHeader(asset: asset),
-                    const SizedBox(height: 18),
                     Row(
                       children: [
                         Expanded(
+                          flex: 2,
                           child: TextField(
-                            controller: titleController,
-                            decoration: _inputDecoration('Maintenance Title'),
+                            onChanged: (value) {
+                              setDialogState(() {
+                                dialogSearch = value;
+                              });
+                            },
+                            decoration: const InputDecoration(
+                              hintText: 'Search...',
+                              prefixIcon: Icon(Icons.search),
+                              border: OutlineInputBorder(),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            initialValue: maintenanceStatus,
-                            decoration: _inputDecoration('Status'),
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'Open',
-                                child: Text('Open'),
+                            initialValue: dialogBranch,
+                            decoration: const InputDecoration(
+                              labelText: 'Branch',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: [
+                              const DropdownMenuItem<String>(
+                                value: null,
+                                child: Text('All Branches'),
                               ),
-                              DropdownMenuItem(
-                                value: 'In Progress',
-                                child: Text('In Progress'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'Completed',
-                                child: Text('Completed'),
+                              ...branches.map(
+                                (branch) => DropdownMenuItem<String>(
+                                  value: branch,
+                                  child: Text(branch),
+                                ),
                               ),
                             ],
                             onChanged: (value) {
-                              if (value == null) return;
                               setDialogState(() {
-                                maintenanceStatus = value;
+                                dialogBranch = value;
                               });
                             },
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: detailsController,
-                      minLines: 3,
-                      maxLines: 4,
-                      decoration: _inputDecoration('Maintenance Details'),
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: costController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
+                    const SizedBox(height: 16),
+                    _AssetTableHeader(operationLabel: 'Dispose'),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 360),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: filtered.isEmpty
+                              ? const [
+                                  SizedBox(
+                                    height: 140,
+                                    child: Center(
+                                      child: Text('No available assets'),
+                                    ),
+                                  ),
+                                ]
+                              : filtered.take(10).map((asset) {
+                                  return _AssetTableRow(
+                                    asset: asset,
+                                    operationLabel: 'Select',
+                                    operationIcon: Icons.add_circle_outline,
+                                    onOperation: () =>
+                                        Navigator.pop(context, asset),
+                                    onDetails: () {},
+                                    onTransfer: () {},
+                                    onDispose: () {},
+                                    onMaintenance: () {},
+                                  );
+                                }).toList(),
+                        ),
                       ),
-                      decoration: _inputDecoration('Maintenance Cost'),
                     ),
                   ],
                 ),
               ),
               actions: [
-                TextButton(
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (picked == null) return;
+    await _openDisposeDetailsDialog(picked);
+  }
+
+  Future<void> _openDisposeDetailsDialog(AssetStockModel asset) async {
+    _resetDisposeForm();
+    disposeDateController.text = _formatPickerDate(DateTime.now());
+
+    final saved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 36,
+                vertical: 28,
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(26, 22, 16, 10),
+              contentPadding: const EdgeInsets.fromLTRB(26, 8, 26, 18),
+              actionsPadding: const EdgeInsets.fromLTRB(26, 0, 26, 22),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.change_circle_outlined,
+                      color: Colors.red,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Dispose Asset'),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${asset.name} | ${asset.itemCode}',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.subText,
+                            fontWeight: FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 760,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xfffffbfb),
+                        border: Border.all(color: AppColors.border),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          _AssetImage(path: asset.imagePath),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Wrap(
+                              spacing: 24,
+                              runSpacing: 8,
+                              children: [
+                                _DialogInfo(
+                                  label: 'Status',
+                                  value: asset.status,
+                                ),
+                                _DialogInfo(
+                                  label: 'Site',
+                                  value: asset.projectName,
+                                ),
+                                _DialogInfo(
+                                  label: 'Location',
+                                  value: asset.location,
+                                ),
+                                _DialogInfo(
+                                  label: 'Category',
+                                  value: asset.category,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            children: [
+                              _DateTextField(
+                                controller: disposeDateController,
+                                label: 'Date Disposed *',
+                                onTap: () => _pickDateInto(
+                                  disposeDateController,
+                                  setDialogState,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: disposeToController,
+                                decoration: _inputDecoration('Dispose to'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: TextField(
+                            controller: disposeNotesController,
+                            minLines: 5,
+                            maxLines: 5,
+                            decoration: _inputDecoration('Notes'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                OutlinedButton(
                   onPressed: () => Navigator.pop(context, false),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(context, true),
-                  icon: const Icon(Icons.build, color: Colors.white),
+                  onPressed: () async {
+                    if (disposeDateController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Date Disposed is required'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    await _disposeAsset(asset);
+                    if (!context.mounted) return;
+                    Navigator.pop(context, true);
+                  },
+                  icon: const Icon(Icons.delete_outline, color: Colors.white),
                   label: const Text(
-                    'Add',
+                    'Dispose',
                     style: TextStyle(color: Colors.white),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryColor,
+                    backgroundColor: Colors.red,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 15,
+                    ),
                   ),
                 ),
               ],
@@ -516,18 +790,83 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       },
     );
 
-    if (result != true) return;
+    if (saved != true) {
+      _resetDisposeForm();
+    }
+  }
 
-    await webRepository.updateStatus(
-      itemCode: asset.itemCode,
-      status: 'Maintenance',
+  void _resetMaintenanceForm() {
+    maintenanceTitleController.clear();
+    maintenanceDetailsController.clear();
+    maintenanceDueDateController.clear();
+    maintenanceCompletedDateController.clear();
+    maintenanceByController.clear();
+    maintenanceCostController.clear();
+    setState(() {
+      selectedMaintenanceAsset = null;
+      maintenanceStatus = 'Open';
+      maintenanceRepeating = false;
+    });
+  }
+
+  String _formatPickerDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/'
+        '${date.year}';
+  }
+
+  DateTime? _maintenanceRecordDate(Map<String, dynamic> record) {
+    final value =
+        record['completed_date']?.toString() ??
+        record['due_date']?.toString() ??
+        record['created_at']?.toString();
+    if (value == null || value.trim().isEmpty) return null;
+    return DateTime.tryParse(value)?.toLocal();
+  }
+
+  String _formatDisplayDate(String? value) {
+    if (value == null || value.trim().isEmpty) return '-';
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) return value;
+    return _formatPickerDate(parsed.toLocal());
+  }
+
+  AssetStockModel? _assetByItemCode(String itemCode) {
+    for (final asset in assets) {
+      if (asset.itemCode == itemCode) return asset;
+    }
+    return null;
+  }
+
+  Future<void> _pickDateInto(
+    TextEditingController controller,
+    StateSetter setDialogState,
+  ) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.tryParse(controller.text) ?? now,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 20),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.primaryColor,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: AppColors.headerText,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
 
-    titleController.dispose();
-    detailsController.dispose();
-    costController.dispose();
-
-    await _loadData();
+    if (picked == null) return;
+    setDialogState(() {
+      controller.text = _formatPickerDate(picked);
+    });
   }
 
   InputDecoration _inputDecoration(String label) {
@@ -557,6 +896,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
             children: [
               _Sidebar(
                 section: selectedSection,
+                alertCount: alertCount,
                 onSelected: (section) {
                   setState(() {
                     selectedSection = section;
@@ -619,6 +959,10 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     switch (selectedSection) {
       case WebAssetSection.assets:
         return _assetsPanel();
+      case WebAssetSection.inventory:
+        return _inventoryPanel();
+      case WebAssetSection.alerts:
+        return _alertsPanel();
       case WebAssetSection.transfer:
         return _operationPanel(
           title: 'Transfer / Move',
@@ -629,24 +973,9 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
           onAction: _transferAsset,
         );
       case WebAssetSection.dispose:
-        return _operationPanel(
-          title: 'Dispose',
-          icon: Icons.change_circle_outlined,
-          description:
-              'Dispose assets while keeping the asset record in the database.',
-          actionLabel: 'Dispose',
-          actionIcon: Icons.delete_outline,
-          onAction: _disposeAsset,
-        );
+        return _disposePanel();
       case WebAssetSection.maintenance:
-        return _operationPanel(
-          title: 'Maintenance',
-          icon: Icons.settings_suggest_outlined,
-          description: 'Bulk define maintenance for selected assets.',
-          actionLabel: 'Maintenance',
-          actionIcon: Icons.build,
-          onAction: _maintenanceAsset,
-        );
+        return _maintenancePanel();
       case WebAssetSection.dashboard:
         return _dashboard();
     }
@@ -769,7 +1098,247 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     );
   }
 
+  String _dateKey(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
+  String _monthName(int month) {
+    const names = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return names[month - 1];
+  }
+
+  Future<void> _showMaintenanceRecordDialog(Map<String, dynamic> record) async {
+    final itemCode = record['item_code']?.toString() ?? '';
+    final asset = _assetByItemCode(itemCode);
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 36,
+            vertical: 28,
+          ),
+          titlePadding: const EdgeInsets.fromLTRB(22, 18, 12, 12),
+          contentPadding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
+          actionsPadding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
+          title: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Asset Maintenance',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 640,
+            child: DefaultTabController(
+              length: 2,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const TabBar(
+                    labelColor: AppColors.headerText,
+                    unselectedLabelColor: AppColors.headerText,
+                    indicatorColor: Color(0xffffbd0a),
+                    indicatorWeight: 2,
+                    tabs: [
+                      Tab(text: 'Maintenance Details'),
+                      Tab(text: 'Asset Details'),
+                    ],
+                  ),
+                  Container(
+                    height: 330,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: TabBarView(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: SingleChildScrollView(
+                            child: _InfoTable(
+                              rows: [
+                                _InfoRow(
+                                  'Title',
+                                  record['title']?.toString() ?? '-',
+                                ),
+                                _InfoRow(
+                                  'Details',
+                                  record['details']?.toString() ?? '-',
+                                ),
+                                _InfoRow(
+                                  'Due Date',
+                                  _formatDisplayDate(
+                                    record['due_date']?.toString(),
+                                  ),
+                                ),
+                                _InfoRow(
+                                  'Maintenance By',
+                                  record['maintenance_by']?.toString() ?? '-',
+                                ),
+                                _InfoRow(
+                                  'Maintenance Status',
+                                  record['status']?.toString() ?? '-',
+                                ),
+                                _InfoRow(
+                                  'Date completed',
+                                  _formatDisplayDate(
+                                    record['completed_date']?.toString(),
+                                  ),
+                                ),
+                                _InfoRow(
+                                  'Maintenance Cost',
+                                  record['cost']?.toString() ?? '-',
+                                ),
+                                _InfoRow(
+                                  'Repeating',
+                                  record['repeating'] == true ? 'Yes' : 'No',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: asset == null
+                              ? Center(
+                                  child: Text(
+                                    itemCode.isEmpty
+                                        ? 'Asset not found'
+                                        : 'Asset $itemCode not found',
+                                  ),
+                                )
+                              : Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SizedBox(
+                                      width: 150,
+                                      child: _LargeAssetImage(
+                                        path: asset.imagePath,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: SingleChildScrollView(
+                                        child: _InfoTable(
+                                          rows: [
+                                            _InfoRow(
+                                              'Asset Tag ID',
+                                              asset.itemCode,
+                                            ),
+                                            _InfoRow('Description', asset.name),
+                                            _InfoRow(
+                                              'Purchase Date',
+                                              _formatPickerDate(
+                                                asset.createdAt,
+                                              ),
+                                            ),
+                                            const _InfoRow(
+                                              'Purchased from',
+                                              '-',
+                                            ),
+                                            _InfoRow(
+                                              'Cost',
+                                              asset.cost.toStringAsFixed(2),
+                                            ),
+                                            _InfoRow('Brand', asset.brand),
+                                            _InfoRow('Model', asset.model),
+                                            _InfoRow(
+                                              'Serial No',
+                                              asset.serialNo,
+                                            ),
+                                            _InfoRow('Site', asset.projectName),
+                                            _InfoRow(
+                                              'Location',
+                                              asset.location,
+                                            ),
+                                            _InfoRow(
+                                              'Category',
+                                              asset.category,
+                                            ),
+                                            _InfoRow(
+                                              'Sub Category',
+                                              asset.subCategory,
+                                            ),
+                                            const _InfoRow('Department', '-'),
+                                            _InfoRow('Status', asset.status),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            if (asset != null)
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showAssetDetails(asset);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xffffbd0a),
+                  foregroundColor: Colors.black,
+                ),
+                child: const Text('More Details'),
+              ),
+            OutlinedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _alertPanel() {
+    final monthStart = DateTime(alertMonth.year, alertMonth.month);
+    final gridStart = monthStart.subtract(
+      Duration(days: monthStart.weekday % 7),
+    );
+    final monthLabel =
+        '${_monthName(alertMonth.month).toUpperCase()} ${alertMonth.year}';
+    final recordsByDate = <String, List<Map<String, dynamic>>>{};
+
+    for (final record in maintenanceRecords) {
+      final recordBranch = record['branch']?.toString() ?? '';
+      if (selectedBranch != null && recordBranch != selectedBranch) continue;
+      final date = _maintenanceRecordDate(record);
+      if (date == null) continue;
+      final key = _dateKey(date);
+      recordsByDate.putIfAbsent(key, () => []).add(record);
+    }
+
     return _Panel(
       title: 'Alert',
       trailing: Wrap(
@@ -782,33 +1351,158 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
           _AlertChip(label: 'Lease', color: Color(0xffffb23f)),
         ],
       ),
-      child: SizedBox(
-        height: 360,
-        child: GridView.builder(
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 7,
-            childAspectRatio: 1.55,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              OutlinedButton(
+                onPressed: () {
+                  setState(() {
+                    alertMonth = DateTime(
+                      alertMonth.year,
+                      alertMonth.month - 1,
+                    );
+                  });
+                },
+                child: const Icon(Icons.chevron_left),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: () {
+                  setState(() {
+                    alertMonth = DateTime(
+                      alertMonth.year,
+                      alertMonth.month + 1,
+                    );
+                  });
+                },
+                child: const Icon(Icons.chevron_right),
+              ),
+              Expanded(
+                child: Center(
+                  child: Text(
+                    monthLabel,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 9,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xffffbd0a),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'month',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
           ),
-          itemCount: 35,
-          itemBuilder: (context, index) {
-            final day = index - 1;
-            final isToday = day == DateTime.now().day;
+          const SizedBox(height: 14),
+          Row(
+            children: const [
+              _CalendarDayHeader('Sun'),
+              _CalendarDayHeader('Mon'),
+              _CalendarDayHeader('Tue'),
+              _CalendarDayHeader('Wed'),
+              _CalendarDayHeader('Thu'),
+              _CalendarDayHeader('Fri'),
+              _CalendarDayHeader('Sat'),
+            ],
+          ),
+          SizedBox(
+            height: 420,
+            child: GridView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 7,
+                childAspectRatio: 1.15,
+              ),
+              itemCount: 42,
+              itemBuilder: (context, index) {
+                final date = gridStart.add(Duration(days: index));
+                final isCurrentMonth = date.month == alertMonth.month;
+                final today = DateTime.now();
+                final isToday =
+                    date.year == today.year &&
+                    date.month == today.month &&
+                    date.day == today.day;
+                final records = recordsByDate[_dateKey(date)] ?? const [];
 
-            return Container(
-              alignment: Alignment.topRight,
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: isToday ? const Color(0xfffff6d8) : Colors.white,
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Text(
-                day < 1 ? '' : day.toString(),
-                style: const TextStyle(color: Color(0xff0051c8)),
-              ),
-            );
-          },
-        ),
+                return Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: isToday ? const Color(0xfffff6d8) : Colors.white,
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        date.day.toString(),
+                        style: TextStyle(
+                          color: isCurrentMonth
+                              ? const Color(0xff0051c8)
+                              : const Color(0xffaac8ef),
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      ...records.take(2).map((record) {
+                        final itemCode = record['asset_name']?.toString() ?? '';
+                        return Align(
+                          alignment: Alignment.centerLeft,
+                          child: InkWell(
+                            onTap: () => _showMaintenanceRecordDialog(record),
+                            child: Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xff9b55c7),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                              child: Text(
+                                itemCode.isEmpty ? 'Maintenance' : itemCode,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                      if (records.length > 2)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '+${records.length - 2} more',
+                            style: const TextStyle(
+                              color: AppColors.subText,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -853,12 +1547,897 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                 asset: asset,
                 onDetails: () => _showAssetDetails(asset),
                 onTransfer: () => _transferAsset(asset),
-                onDispose: () => _disposeAsset(asset),
-                onMaintenance: () => _maintenanceAsset(asset),
+                onDispose: () => _openDisposeDetailsDialog(asset),
+                onMaintenance: () => _openMaintenanceDetailsDialog(asset),
               );
             }),
         ],
       ),
+    );
+  }
+
+  Widget _inventoryPanel() {
+    return _Panel(
+      title: 'Inventory',
+      trailing: SizedBox(
+        width: 300,
+        child: TextField(
+          controller: searchController,
+          onChanged: (value) {
+            setState(() {
+              searchQuery = value;
+            });
+          },
+          decoration: InputDecoration(
+            hintText: 'Search Inventory',
+            prefixIcon: const Icon(Icons.search),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+          ),
+        ),
+      ),
+      child: Column(
+        children: [
+          _AssetTableHeader(),
+          if (visibleInventoryAssets.isEmpty)
+            const SizedBox(
+              height: 180,
+              child: Center(child: Text('No inventory items found')),
+            )
+          else
+            ...visibleInventoryAssets.map((asset) {
+              return _AssetTableRow(
+                asset: asset,
+                onDetails: () => _showAssetDetails(asset),
+                onTransfer: () => _transferAsset(asset),
+                onDispose: () => _openDisposeDetailsDialog(asset),
+                onMaintenance: () => _openMaintenanceDetailsDialog(asset),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openMaintenanceAssetPicker() async {
+    final picked = await showDialog<AssetStockModel>(
+      context: context,
+      builder: (context) {
+        var dialogBranch = selectedBranch;
+        var dialogSearch = '';
+        AssetStockModel? selected;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filtered = assets.where((asset) {
+              final search = dialogSearch.trim().toLowerCase();
+              return _matchesSearch(asset, search) &&
+                  _isRegularAsset(asset) &&
+                  (dialogBranch == null || asset.location == dialogBranch);
+            }).toList();
+
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              titlePadding: const EdgeInsets.fromLTRB(24, 20, 16, 8),
+              contentPadding: const EdgeInsets.fromLTRB(24, 10, 24, 18),
+              actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              title: Row(
+                children: [
+                  const Expanded(child: Text('Select Assets')),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 900,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            onChanged: (value) {
+                              setDialogState(() {
+                                dialogSearch = value;
+                              });
+                            },
+                            decoration: const InputDecoration(
+                              hintText: 'Search...',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: dialogBranch,
+                            decoration: const InputDecoration(
+                              labelText: 'Branch',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: [
+                              const DropdownMenuItem<String>(
+                                value: null,
+                                child: Text('All Branches'),
+                              ),
+                              ...branches.map(
+                                (branch) => DropdownMenuItem<String>(
+                                  value: branch,
+                                  child: Text(branch),
+                                ),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              setDialogState(() {
+                                dialogBranch = value;
+                                selected = null;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Show 10 entries'),
+                    const SizedBox(height: 8),
+                    _AssetTableHeader(operationLabel: 'Select'),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 360),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: filtered.isEmpty
+                              ? const [
+                                  SizedBox(
+                                    height: 140,
+                                    child: Center(
+                                      child: Text('No available assets'),
+                                    ),
+                                  ),
+                                ]
+                              : filtered.take(10).map((asset) {
+                                  final isSelected =
+                                      selected?.itemCode == asset.itemCode;
+                                  return Container(
+                                    color: isSelected
+                                        ? const Color(0xfffff8de)
+                                        : null,
+                                    child: _AssetTableRow(
+                                      asset: asset,
+                                      operationLabel: isSelected
+                                          ? 'Selected'
+                                          : 'Select',
+                                      operationIcon: isSelected
+                                          ? Icons.check_circle
+                                          : Icons.add_circle_outline,
+                                      onOperation: () {
+                                        setDialogState(() {
+                                          selected = asset;
+                                        });
+                                        Navigator.pop(context, asset);
+                                      },
+                                      onDetails: () {},
+                                      onTransfer: () {},
+                                      onDispose: () {},
+                                      onMaintenance: () {},
+                                    ),
+                                  );
+                                }).toList(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: selected == null
+                      ? null
+                      : () => Navigator.pop(context, selected),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xffffbd0a),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
+                  ),
+                  child: const Text('Add to List'),
+                ),
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (picked == null) return;
+    await _openMaintenanceDetailsDialog(picked);
+  }
+
+  Future<void> _openMaintenanceDetailsDialog(AssetStockModel asset) async {
+    maintenanceTitleController.text = asset.name;
+    maintenanceDetailsController.clear();
+    maintenanceDueDateController.clear();
+    maintenanceCompletedDateController.clear();
+    maintenanceByController.clear();
+    maintenanceCostController.text = asset.cost == 0
+        ? ''
+        : asset.cost.toStringAsFixed(2);
+
+    var dialogStatus = maintenanceStatus;
+    var dialogRepeating = maintenanceRepeating;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 36,
+                vertical: 28,
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(26, 22, 16, 10),
+              contentPadding: const EdgeInsets.fromLTRB(26, 8, 26, 18),
+              actionsPadding: const EdgeInsets.fromLTRB(26, 0, 26, 22),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: Colors.deepOrange.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.settings_suggest_outlined,
+                      color: Colors.deepOrange,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Add Maintenance'),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${asset.name} | ${asset.itemCode}',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.subText,
+                            fontWeight: FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 820,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xfff7fbff),
+                        border: Border.all(color: AppColors.border),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          _AssetImage(path: asset.imagePath),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Wrap(
+                              spacing: 24,
+                              runSpacing: 8,
+                              children: [
+                                _DialogInfo(
+                                  label: 'Status',
+                                  value: asset.status,
+                                ),
+                                _DialogInfo(
+                                  label: 'Site',
+                                  value: asset.projectName,
+                                ),
+                                _DialogInfo(
+                                  label: 'Location',
+                                  value: asset.location,
+                                ),
+                                _DialogInfo(
+                                  label: 'Category',
+                                  value: asset.category,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            children: [
+                              TextField(
+                                controller: maintenanceTitleController,
+                                decoration: _inputDecoration(
+                                  'Maintenance Title *',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: maintenanceDetailsController,
+                                minLines: 4,
+                                maxLines: 5,
+                                decoration: _inputDecoration(
+                                  'Maintenance Details',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              _DateTextField(
+                                controller: maintenanceDueDateController,
+                                label: 'Maint. Due Date',
+                                onTap: () => _pickDateInto(
+                                  maintenanceDueDateController,
+                                  setDialogState,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: maintenanceByController,
+                                decoration: _inputDecoration('Maintenance By'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: Column(
+                            children: [
+                              DropdownButtonFormField<String>(
+                                initialValue: dialogStatus,
+                                decoration: _inputDecoration(
+                                  'Maintenance Status',
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'Open',
+                                    child: Text('Open'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'In Progress',
+                                    child: Text('In Progress'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'Completed',
+                                    child: Text('Completed'),
+                                  ),
+                                ],
+                                onChanged: (value) {
+                                  if (value == null) return;
+                                  setDialogState(() {
+                                    dialogStatus = value;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              _DateTextField(
+                                controller: maintenanceCompletedDateController,
+                                label: 'Date completed',
+                                onTap: () => _pickDateInto(
+                                  maintenanceCompletedDateController,
+                                  setDialogState,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: maintenanceCostController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                decoration: _inputDecoration(
+                                  'Maintenance Cost',
+                                ).copyWith(prefixText: 'AED  '),
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  const Text('Repeating'),
+                                  const SizedBox(width: 18),
+                                  Radio<bool>(
+                                    value: true,
+                                    groupValue: dialogRepeating,
+                                    onChanged: (value) {
+                                      setDialogState(() {
+                                        dialogRepeating = value ?? false;
+                                      });
+                                    },
+                                  ),
+                                  const Text('Yes'),
+                                  const SizedBox(width: 8),
+                                  Radio<bool>(
+                                    value: false,
+                                    groupValue: dialogRepeating,
+                                    onChanged: (value) {
+                                      setDialogState(() {
+                                        dialogRepeating = value ?? false;
+                                      });
+                                    },
+                                  ),
+                                  const Text('No'),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    if (maintenanceTitleController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Maintenance Title is required'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    setState(() {
+                      selectedMaintenanceAsset = asset;
+                      maintenanceStatus = dialogStatus;
+                      maintenanceRepeating = dialogRepeating;
+                    });
+                    await _maintenanceAsset(asset);
+                    if (!context.mounted) return;
+                    Navigator.pop(context, true);
+                  },
+                  icon: const Icon(Icons.add, color: Colors.black),
+                  label: const Text('Add'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xffffbd0a),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 15,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (saved != true) {
+      _resetMaintenanceForm();
+    }
+  }
+
+  Widget _alertsPanel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.flag_outlined, color: Colors.deepOrange),
+            const SizedBox(width: 12),
+            const Text(
+              'Alerts',
+              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(width: 12),
+            if (alertCount > 0)
+              CircleAvatar(
+                radius: 15,
+                backgroundColor: Colors.redAccent,
+                child: Text(
+                  alertCount.toString(),
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _Panel(
+          title: 'Maintenance due in 3 days',
+          child: maintenanceAlerts.isEmpty
+              ? const SizedBox(
+                  height: 160,
+                  child: Center(child: Text('No maintenance alerts')),
+                )
+              : Column(
+                  children: maintenanceAlerts.map((alert) {
+                    final itemCode = alert['item_code']?.toString() ?? '';
+                    AssetStockModel? asset;
+                    for (final candidate in assets) {
+                      if (candidate.itemCode == itemCode) {
+                        asset = candidate;
+                        break;
+                      }
+                    }
+                    final date =
+                        alert['completed_date']?.toString() ??
+                        alert['due_date']?.toString() ??
+                        '-';
+
+                    final tappedAsset = asset;
+
+                    return ListTile(
+                      leading: const Icon(
+                        Icons.settings_suggest_outlined,
+                        color: Colors.deepOrange,
+                      ),
+                      title: Text(
+                        '${alert['asset_name'] ?? itemCode} - $itemCode',
+                      ),
+                      subtitle: Text(
+                        'Complete date: $date | ${alert['branch'] ?? '-'}',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: tappedAsset == null
+                          ? null
+                          : () {
+                              setState(() {
+                                selectedSection = WebAssetSection.assets;
+                              });
+                              _showAssetDetails(tappedAsset);
+                            },
+                    );
+                  }).toList(),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _disposePanel() {
+    final search = searchQuery.trim().toLowerCase();
+    final disposedAssets = assets.where((asset) {
+      return _matchesBranchAndSearch(asset, search) &&
+          asset.status.trim().toLowerCase() == 'disposed';
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.change_circle_outlined, color: Colors.deepOrange),
+            const SizedBox(width: 12),
+            const Text(
+              'Dispose',
+              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w500),
+            ),
+            const Spacer(),
+            ElevatedButton.icon(
+              onPressed: _openDisposeAssetPicker,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text(
+                'Select Assets',
+                style: TextStyle(color: Colors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xff3ec37b),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _Panel(
+          title: '',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: searchController,
+                      onChanged: (value) {
+                        setState(() {
+                          searchQuery = value;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search disposed assets',
+                        prefixIcon: const Icon(Icons.search),
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 15,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 13,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.red.withValues(alpha: 0.22),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.delete_outline, color: Colors.red),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${disposedAssets.length} disposed',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xfffffbfb),
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Select an asset to document disposal. Only assets already marked as Disposed stay listed here.',
+                  style: TextStyle(color: AppColors.subText),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Assets Pending Disposal',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 17,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${disposedAssets.length} records',
+                    style: const TextStyle(color: AppColors.subText),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _AssetTableHeader(operationLabel: 'Dispose'),
+              if (disposedAssets.isEmpty)
+                const SizedBox(
+                  height: 180,
+                  child: Center(child: Text('No disposed assets found')),
+                )
+              else
+                ...disposedAssets.map((asset) {
+                  return _AssetTableRow(
+                    asset: asset,
+                    operationLabel: 'Edit',
+                    operationIcon: Icons.edit,
+                    onOperation: () => _openDisposeDetailsDialog(asset),
+                    onDetails: () => _showAssetDetails(asset),
+                    onTransfer: () => _transferAsset(asset),
+                    onDispose: () => _openDisposeDetailsDialog(asset),
+                    onMaintenance: () => _openMaintenanceDetailsDialog(asset),
+                  );
+                }),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _maintenancePanel() {
+    final search = searchQuery.trim().toLowerCase();
+    final maintenanceAssets = assets.where((asset) {
+      return _matchesBranchAndSearch(asset, search) &&
+          asset.status.trim().toLowerCase() == 'maintenance';
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.settings_suggest_outlined,
+              color: Colors.deepOrange,
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Maintenance',
+              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w500),
+            ),
+            const Spacer(),
+            ElevatedButton.icon(
+              onPressed: _openMaintenanceAssetPicker,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text(
+                'Select Assets',
+                style: TextStyle(color: Colors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xff3ec37b),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _Panel(
+          title: '',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: searchController,
+                      onChanged: (value) {
+                        setState(() {
+                          searchQuery = value;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search maintenance assets',
+                        prefixIcon: const Icon(Icons.search),
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 15,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 13,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.11),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.orange.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.build, color: Colors.orange),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${maintenanceAssets.length} in maintenance',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xfff8fbff),
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Select an asset to open the maintenance form. Only assets currently marked as Maintenance stay listed here.',
+                  style: TextStyle(color: AppColors.subText),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Assets Pending Maintenance',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 17,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${maintenanceAssets.length} records',
+                    style: const TextStyle(color: AppColors.subText),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _AssetTableHeader(operationLabel: 'Maintenance'),
+              if (maintenanceAssets.isEmpty)
+                const SizedBox(
+                  height: 180,
+                  child: Center(child: Text('No assets pending maintenance')),
+                )
+              else
+                ...maintenanceAssets.map((asset) {
+                  return _AssetTableRow(
+                    asset: asset,
+                    operationLabel: 'Edit',
+                    operationIcon: Icons.edit,
+                    onOperation: () => _openMaintenanceDetailsDialog(asset),
+                    onDetails: () => _showAssetDetails(asset),
+                    onTransfer: () => _transferAsset(asset),
+                    onDispose: () => _openDisposeDetailsDialog(asset),
+                    onMaintenance: () => _openMaintenanceDetailsDialog(asset),
+                  );
+                }),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -923,8 +2502,8 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                   onOperation: () => onAction(asset),
                   onDetails: () => _showAssetDetails(asset),
                   onTransfer: () => _transferAsset(asset),
-                  onDispose: () => _disposeAsset(asset),
-                  onMaintenance: () => _maintenanceAsset(asset),
+                  onDispose: () => _openDisposeDetailsDialog(asset),
+                  onMaintenance: () => _openMaintenanceDetailsDialog(asset),
                 );
               }),
             ],
@@ -1031,9 +2610,14 @@ class _TopBar extends StatelessWidget {
 
 class _Sidebar extends StatelessWidget {
   final WebAssetSection section;
+  final int alertCount;
   final ValueChanged<WebAssetSection> onSelected;
 
-  const _Sidebar({required this.section, required this.onSelected});
+  const _Sidebar({
+    required this.section,
+    required this.alertCount,
+    required this.onSelected,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1065,14 +2649,20 @@ class _Sidebar extends StatelessWidget {
             selected: section == WebAssetSection.dashboard,
             onTap: () => onSelected(WebAssetSection.dashboard),
           ),
-          /* _SidebarItem(
+          _SidebarItem(
             icon: Icons.notifications_none,
             label: 'Alerts',
-            badge: '1',
-            selected: false,
-            onTap: () => onSelected(WebAssetSection.dashboard),
-          ),*/
+            badge: alertCount > 0 ? alertCount.toString() : null,
+            selected: section == WebAssetSection.alerts,
+            onTap: () => onSelected(WebAssetSection.alerts),
+          ),
           _SidebarGroup(selected: section, onSelected: onSelected),
+          _SidebarItem(
+            icon: Icons.inventory_2_outlined,
+            label: 'Inventory',
+            selected: section == WebAssetSection.inventory,
+            onTap: () => onSelected(WebAssetSection.inventory),
+          ),
           /*  _SidebarItem(
             icon: Icons.list_alt_outlined,
             label: 'Lists',
@@ -1090,14 +2680,6 @@ class _Sidebar extends StatelessWidget {
             label: 'Setup',
             selected: false,
             onTap: () => onSelected(WebAssetSection.dashboard),
-          ),
-          const Spacer(),
-          Padding(
-            padding: const EdgeInsets.all(18),
-            child: Text(
-              'Web management console',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
           ),
         ],
       ),
@@ -1423,6 +3005,161 @@ class _AlertChip extends StatelessWidget {
   }
 }
 
+class _CalendarDayHeader extends StatelessWidget {
+  final String label;
+
+  const _CalendarDayHeader(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xfffff9e5),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+}
+
+class _InfoRow {
+  final String label;
+  final String value;
+
+  const _InfoRow(this.label, this.value);
+}
+
+class _InfoTable extends StatelessWidget {
+  final List<_InfoRow> rows;
+
+  const _InfoTable({required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
+    return Table(
+      columnWidths: const {0: FixedColumnWidth(150), 1: FlexColumnWidth()},
+      border: TableBorder.all(color: AppColors.border),
+      children: rows.map((row) {
+        return TableRow(
+          children: [
+            Container(
+              color: const Color(0xfffff9e5),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              child: Text(row.label),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              child: Text(row.value.trim().isEmpty ? '-' : row.value),
+            ),
+          ],
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _LargeAssetImage extends StatelessWidget {
+  final String? path;
+
+  const _LargeAssetImage({this.path});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = path != null && path!.trim().isNotEmpty;
+
+    return Container(
+      height: 150,
+      decoration: BoxDecoration(
+        color: AppColors.backgroundWidget,
+        border: Border.all(color: AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: hasImage
+          ? Image.network(path!, fit: BoxFit.cover)
+          : const Icon(
+              Icons.inventory_2_outlined,
+              color: AppColors.primaryColor,
+              size: 42,
+            ),
+    );
+  }
+}
+
+class _DialogInfo extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _DialogInfo({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final shownValue = value.trim().isEmpty ? '-' : value;
+
+    return SizedBox(
+      width: 155,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AppColors.subText),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            shownValue,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final VoidCallback onTap;
+
+  const _DateTextField({
+    required this.controller,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      readOnly: true,
+      onTap: onTap,
+      decoration: InputDecoration(
+        labelText: label,
+        suffixIcon: IconButton(
+          tooltip: label,
+          onPressed: onTap,
+          icon: const Icon(Icons.calendar_today_outlined, size: 18),
+        ),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: const OutlineInputBorder(
+          borderSide: BorderSide(color: AppColors.primaryColor),
+        ),
+      ),
+    );
+  }
+}
+
 class _TransferInfoBox extends StatelessWidget {
   final String title;
   final String branch;
@@ -1527,6 +3264,7 @@ class _AssetTableRow extends StatelessWidget {
               flex: 2,
               child: Row(
                 children: [
+                  SizedBox(width: 10),
                   Container(
                     width: 10,
                     height: 10,

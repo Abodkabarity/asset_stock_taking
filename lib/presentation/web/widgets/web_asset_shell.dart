@@ -3,7 +3,15 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../pages/web_asset_dashboard_page.dart';
 
-enum WebShellSection { dashboard, assets, transfer, dispose, maintenance }
+enum WebShellSection {
+  dashboard,
+  alerts,
+  assets,
+  inventory,
+  transfer,
+  dispose,
+  maintenance,
+}
 
 class WebAssetShell extends StatelessWidget {
   final Widget child;
@@ -52,23 +60,23 @@ class _ShellTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 58,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      height: 82,
+      padding: const EdgeInsets.symmetric(horizontal: 28),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
-          Image.asset('assets/images/icon.png', height: 36, width: 46),
+          Image.asset('assets/images/icon.png', height: 50, width: 58),
           const SizedBox(width: 14),
           Text(
             title,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(width: 28),
+          const SizedBox(width: 32),
           _TopLink(
-            icon: Icons.format_list_bulleted,
+            icon: Icons.inventory_2_outlined,
             label: 'Assets',
             onTap: () => _goHome(context, WebAssetSection.assets),
           ),
@@ -78,24 +86,19 @@ class _ShellTopBar extends StatelessWidget {
             onTap: onAddAsset ?? () => _goHome(context, WebAssetSection.assets),
           ),
           _TopLink(
-            icon: Icons.inventory_2_outlined,
-            label: 'Inventory',
-            onTap: () => _goHome(context, WebAssetSection.dashboard),
+            icon: Icons.file_download_outlined,
+            label: 'Export',
+            onTap: () => _goHome(context, WebAssetSection.assets),
+          ),
+          _TopLink(
+            icon: Icons.print_outlined,
+            label: 'Print',
+            onTap: () => _goHome(context, WebAssetSection.assets),
           ),
           const Spacer(),
-          const Icon(Icons.access_time, size: 18, color: AppColors.headerText),
-          const SizedBox(width: 8),
-          const Text('Changelog'),
-          const SizedBox(width: 16),
-          const Icon(Icons.local_offer_outlined, size: 18),
-          const SizedBox(width: 8),
-          const Text('Buy Asset Tags'),
-          const SizedBox(width: 22),
-          const CircleAvatar(radius: 14, child: Icon(Icons.person, size: 16)),
-          const SizedBox(width: 8),
-          const Text(
-            'mahmoud alkouz',
-            style: TextStyle(fontWeight: FontWeight.bold),
+          IconButton(
+            onPressed: () => _goHome(context, WebAssetSection.dashboard),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
@@ -144,7 +147,7 @@ class _ShellSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 260,
+      width: 290,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(right: BorderSide(color: AppColors.border)),
@@ -154,24 +157,17 @@ class _ShellSidebar extends StatelessWidget {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(22, 18, 18, 16),
-            child: const Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Al Ain Pharmacy',
-                    style: TextStyle(
-                      color: AppColors.headerText,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Icon(Icons.keyboard_double_arrow_left, color: Colors.grey),
-              ],
+            padding: const EdgeInsets.fromLTRB(28, 28, 22, 24),
+            color: AppColors.primaryColor,
+            child: const Text(
+              'Al Ain Pharmacy',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 25,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-          const Divider(height: 1),
           _SidebarItem(
             icon: Icons.home_outlined,
             label: 'Dashboard',
@@ -181,9 +177,8 @@ class _ShellSidebar extends StatelessWidget {
           _SidebarItem(
             icon: Icons.notifications_none,
             label: 'Alerts',
-            badge: '1',
-            selected: false,
-            onTap: () => _goHome(context, WebAssetSection.dashboard),
+            selected: selectedSection == WebShellSection.alerts,
+            onTap: () => _goHome(context, WebAssetSection.alerts),
           ),
           _SidebarItem(
             icon: Icons.extension_outlined,
@@ -196,12 +191,6 @@ class _ShellSidebar extends StatelessWidget {
             label: 'List of Assets',
             selected: selectedSection == WebShellSection.assets,
             onTap: () => _goHome(context, WebAssetSection.assets),
-          ),
-          _SidebarSubItem(
-            icon: Icons.add_circle_outline,
-            label: 'Add an Asset',
-            selected: false,
-            onTap: onAddAsset ?? () => _goHome(context, WebAssetSection.assets),
           ),
           _SidebarSubItem(
             icon: Icons.open_with,
@@ -221,23 +210,11 @@ class _ShellSidebar extends StatelessWidget {
             selected: selectedSection == WebShellSection.maintenance,
             onTap: () => _goHome(context, WebAssetSection.maintenance),
           ),
-          _SidebarSubItem(
-            icon: Icons.event_available_outlined,
-            label: 'Reserve',
-            selected: false,
-            onTap: () => _goHome(context, WebAssetSection.assets),
-          ),
           _SidebarItem(
             icon: Icons.inventory_2_outlined,
             label: 'Inventory',
-            selected: false,
-            onTap: () => _goHome(context, WebAssetSection.dashboard),
-          ),
-          _SidebarItem(
-            icon: Icons.list_alt_outlined,
-            label: 'Lists',
-            selected: false,
-            onTap: () => _goHome(context, WebAssetSection.dashboard),
+            selected: selectedSection == WebShellSection.inventory,
+            onTap: () => _goHome(context, WebAssetSection.inventory),
           ),
           _SidebarItem(
             icon: Icons.description_outlined,
@@ -277,14 +254,14 @@ class _SidebarItem extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        height: 41,
+        height: 52,
         color: selected ? const Color(0xffffbd0a) : Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 28),
         child: Row(
           children: [
-            Icon(icon, size: 19, color: Colors.deepOrange),
-            const SizedBox(width: 12),
-            Expanded(child: Text(label)),
+            Icon(icon, size: 22, color: Colors.deepOrange),
+            const SizedBox(width: 16),
+            Expanded(child: Text(label, style: const TextStyle(fontSize: 16))),
             if (badge != null)
               CircleAvatar(
                 radius: 12,
@@ -319,9 +296,9 @@ class _SidebarSubItem extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        height: 37,
+        height: 43,
         color: selected ? const Color(0xffefefef) : Colors.white,
-        padding: const EdgeInsets.only(left: 48, right: 16),
+        padding: const EdgeInsets.only(left: 56, right: 22),
         child: Row(
           children: [
             Icon(icon, size: 18, color: Colors.deepOrange),
