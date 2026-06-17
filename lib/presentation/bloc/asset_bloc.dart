@@ -25,56 +25,15 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
   /// =========================================================
   /// MERGE ONLINE + LOCAL
   /// =========================================================
-  List<AssetStockModel> _mergeAssets({
-    required List<AssetStockModel> online,
-    required List<AssetStockModel> local,
-  }) {
-    final Map<String, AssetStockModel> mergedMap = {};
+  static String assetKey(AssetStockModel item) {
+    return item.itemCode.trim().isNotEmpty
+        ? item.itemCode
+        : item.id?.toString() ?? item.createdAt.toIso8601String();
+  }
 
-    /// =========================
-    /// ONLINE FIRST
-    /// =========================
-    for (final item in online) {
-      final key =
-          item.id?.toString() ??
-          '${item.assetCode}_${item.createdAt.toIso8601String()}';
+  static List<AssetStockModel> sortNewestFirst(List<AssetStockModel> items) {
+    final active = items.where((e) => !e.isDeleted).toList();
 
-      mergedMap[key] = item;
-    }
-
-    /// =========================
-    /// LOCAL OVERRIDE
-    /// =========================
-    for (final item in local) {
-      final key =
-          item.id?.toString() ??
-          '${item.assetCode}_${item.createdAt.toIso8601String()}';
-
-      final existing = mergedMap[key];
-
-      /// NEW LOCAL
-      if (existing == null) {
-        mergedMap[key] = item;
-        continue;
-      }
-
-      /// LOCAL MODIFIED
-      if (!item.isSynced || item.isDeleted) {
-        mergedMap[key] = item;
-      }
-    }
-
-    final merged = mergedMap.values.toList();
-
-    /// =========================
-    /// ACTIVE ONLY
-    /// =========================
-
-    /// =========================
-    /// GROUP BY ASSET CODE
-    /// =========================
-    /// ACTIVE ONLY
-    final active = merged.where((e) => !e.isDeleted).toList();
     active.sort((a, b) {
       final dateCompare = b.createdAt.compareTo(a.createdAt);
 
@@ -90,13 +49,65 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
         return 1;
       }
 
-      /// fallback
       return b.itemCode.compareTo(a.itemCode);
     });
 
-    /// SORT NEWEST FIRST
-
     return active;
+  }
+
+  static List<AssetStockModel> mergeAndSortAssets({
+    required List<AssetStockModel> base,
+    required List<AssetStockModel> override,
+  }) {
+    final mergedMap = <String, AssetStockModel>{};
+
+    for (final item in base) {
+      mergedMap[assetKey(item)] = item;
+    }
+
+    for (final item in override) {
+      mergedMap[assetKey(item)] = item;
+    }
+
+    return sortNewestFirst(mergedMap.values.toList());
+  }
+
+  List<AssetStockModel> _mergeAssets({
+    required List<AssetStockModel> online,
+    required List<AssetStockModel> local,
+  }) {
+    final Map<String, AssetStockModel> mergedMap = {};
+
+    /// =========================
+    /// ONLINE FIRST
+    /// =========================
+    for (final item in online) {
+      final key = assetKey(item);
+
+      mergedMap[key] = item;
+    }
+
+    /// =========================
+    /// LOCAL OVERRIDE
+    /// =========================
+    for (final item in local) {
+      final key = assetKey(item);
+
+      final existing = mergedMap[key];
+
+      /// NEW LOCAL
+      if (existing == null) {
+        mergedMap[key] = item;
+        continue;
+      }
+
+      /// LOCAL MODIFIED
+      if (!item.isSynced || item.isDeleted) {
+        mergedMap[key] = item;
+      }
+    }
+
+    return sortNewestFirst(mergedMap.values.toList());
   }
 
   /// =========================================================
@@ -168,25 +179,9 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
         'SYNCED: ${e.isSynced}',
       );
     }
-    local.sort((a, b) {
-      final dateCompare = b.createdAt.compareTo(a.createdAt);
+    final merged = mergeAndSortAssets(base: state.localAssets, override: local);
 
-      if (dateCompare != 0) {
-        return dateCompare;
-      }
-
-      if (!a.isSynced && b.isSynced) {
-        return -1;
-      }
-
-      if (a.isSynced && !b.isSynced) {
-        return 1;
-      }
-
-      return b.itemCode.compareTo(a.itemCode);
-    });
-
-    emit(state.copyWith(localAssets: local, saving: false));
+    emit(state.copyWith(localAssets: merged, saving: false));
   }
 
   /// =========================================================

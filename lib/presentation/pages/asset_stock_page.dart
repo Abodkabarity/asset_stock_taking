@@ -175,18 +175,13 @@ class _AssetStockPageState extends State<AssetStockPage> {
       project: widget.project,
     );
 
-    local.sort((a, b) {
-      final compare = b.createdAt.compareTo(a.createdAt);
-
-      if (compare != 0) {
-        return compare;
-      }
-
-      return b.itemCode.compareTo(a.itemCode);
-    });
+    final merged = AssetBloc.mergeAndSortAssets(
+      base: bloc.state.localAssets,
+      override: local,
+    );
 
     /// STOP LOADING
-    bloc.emit(bloc.state.copyWith(localAssets: local, saving: false));
+    bloc.emit(bloc.state.copyWith(localAssets: merged, saving: false));
 
     /// CLEAR
     assetCodeController.clear();
@@ -607,25 +602,7 @@ class _AssetStockPageState extends State<AssetStockPage> {
                       e.status.toLowerCase().contains(search);
                 }).toList();
 
-                visibleAssets.sort((a, b) {
-                  final compare = b.createdAt.millisecondsSinceEpoch.compareTo(
-                    a.createdAt.millisecondsSinceEpoch,
-                  );
-
-                  if (compare != 0) {
-                    return compare;
-                  }
-
-                  if (!a.isSynced && b.isSynced) {
-                    return -1;
-                  }
-
-                  if (a.isSynced && !b.isSynced) {
-                    return 1;
-                  }
-
-                  return b.itemCode.compareTo(a.itemCode);
-                });
+                final sortedAssets = AssetBloc.sortNewestFirst(visibleAssets);
                 return Padding(
                   padding: const EdgeInsets.all(16),
 
@@ -1297,12 +1274,12 @@ class _AssetStockPageState extends State<AssetStockPage> {
 
                       /// LOCAL LIST
                       Expanded(
-                        child: visibleAssets.isEmpty
+                        child: sortedAssets.isEmpty
                             ? const Center(child: Text('No Local Assets'))
                             : ListView.builder(
-                                itemCount: visibleAssets.length,
+                                itemCount: sortedAssets.length,
                                 itemBuilder: (_, index) {
-                                  final item = visibleAssets[index];
+                                  final item = sortedAssets[index];
                                   return AssetCard(
                                     item: item,
 

@@ -1,44 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/services/asset_excel_service.dart';
 import '../../core/services/barcode_print_service.dart';
 import '../../core/utils/asset_classification_utils.dart';
-import '../../data/models/asset_item_model.dart';
 import '../../data/models/asset_stock_model.dart';
+import '../web/data/web_asset_repository.dart';
+import '../web/pages/web_asset_add_page.dart';
+import '../web/utils/web_asset_colors.dart';
+import '../web/widgets/web_asset_quick_view_dialog.dart';
 
 enum WebAssetSection { dashboard, assets, transfer, dispose, maintenance }
 
-Color _classificationColor(String classification) {
-  switch (classification.trim().toLowerCase()) {
-    case 'public':
-      return Colors.green;
-    case 'restricted':
-      return Colors.lightBlue;
-    case 'confidential':
-      return Colors.amber;
-    default:
-      return Colors.grey;
-  }
-}
-
 class WebAssetDashboardPage extends StatefulWidget {
-  const WebAssetDashboardPage({super.key});
+  final WebAssetSection initialSection;
+
+  const WebAssetDashboardPage({
+    super.key,
+    this.initialSection = WebAssetSection.dashboard,
+  });
 
   @override
   State<WebAssetDashboardPage> createState() => _WebAssetDashboardPageState();
 }
 
 class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
-  final supabase = Supabase.instance.client;
+  final webRepository = WebAssetRepository();
   final searchController = TextEditingController();
 
-  static const double pageScale = 1;
-  WebAssetSection selectedSection = WebAssetSection.dashboard;
+  late WebAssetSection selectedSection;
   List<AssetStockModel> assets = [];
-  List<AssetItemModel> masterItems = [];
   List<String> branches = [];
   String? selectedBranch;
   String searchQuery = '';
@@ -47,6 +39,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   @override
   void initState() {
     super.initState();
+    selectedSection = widget.initialSection;
     _loadData();
   }
 
@@ -61,29 +54,8 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       loading = true;
     });
 
-    final branchResponse = await supabase
-        .from('branches')
-        .select('branch_name')
-        .order('branch_name');
-    final assetResponse = await supabase
-        .from('asset_stock_taking')
-        .select()
-        .order('created_at', ascending: false);
-    final masterResponse = await supabase
-        .from('asset_master')
-        .select()
-        .order('name');
-
-    branches = branchResponse
-        .map<String>((e) => e['branch_name']?.toString() ?? '')
-        .where((e) => e.isNotEmpty)
-        .toList();
-    assets = assetResponse
-        .map<AssetStockModel>((e) => AssetStockModel.fromJson(e))
-        .toList();
-    masterItems = masterResponse
-        .map<AssetItemModel>((e) => AssetItemModel.fromJson(e))
-        .toList();
+    branches = await webRepository.getBranches();
+    assets = await webRepository.getAssets();
 
     setState(() {
       loading = false;
@@ -132,328 +104,20 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   Future<List<String>> _loadProjects(String branch) async {
-    final response = await supabase
-        .from('projects')
-        .select('project_name')
-        .eq('branch_name', branch)
-        .order('project_name');
-
-    return response
-        .map<String>((e) => e['project_name']?.toString() ?? '')
-        .where((e) => e.isNotEmpty)
-        .toList();
-  }
-
-  Future<String> _generateAssetCode(String assetCode) async {
-    final response = await supabase
-        .from('asset_stock_taking')
-        .select('item_code')
-        .eq('asset_code', assetCode);
-
-    final usedSerials = <int>{};
-
-    for (final row in response) {
-      final itemCode = row['item_code']?.toString() ?? '';
-      final serial = int.tryParse(itemCode.split('-').last);
-
-      if (serial != null) {
-        usedSerials.add(serial);
-      }
-    }
-
-    var nextSerial = 1;
-    while (usedSerials.contains(nextSerial)) {
-      nextSerial++;
-    }
-
-    return '$assetCode-${nextSerial.toString().padLeft(4, '0')}';
+    return webRepository.getProjects(branch);
   }
 
   Future<void> _addAsset() async {
-    AssetItemModel? selectedItem;
-    String? branch =
-        selectedBranch ?? (branches.isEmpty ? null : branches.first);
-    List<String> projects = branch == null ? [] : await _loadProjects(branch);
-    String? project = projects.isEmpty ? null : projects.first;
-    String status = 'New';
-    final brandController = TextEditingController();
-    final modelController = TextEditingController();
-    final serialController = TextEditingController();
-    final costController = TextEditingController();
-    final descriptionController = TextEditingController();
-
-    if (!mounted) return;
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              backgroundColor: Colors.white,
-              title: const Text('Add an Asset'),
-              content: SizedBox(
-                width: 760,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Autocomplete<AssetItemModel>(
-                        displayStringForOption: (option) => option.name,
-                        optionsBuilder: (value) {
-                          final search = value.text.trim().toLowerCase();
-                          if (search.isEmpty) {
-                            return const Iterable<AssetItemModel>.empty();
-                          }
-
-                          return masterItems.where((item) {
-                            return item.name.toLowerCase().contains(search) ||
-                                item.itemCode.toLowerCase().contains(search) ||
-                                item.category.toLowerCase().contains(search) ||
-                                item.subCategory.toLowerCase().contains(search);
-                          });
-                        },
-                        onSelected: (item) {
-                          setDialogState(() {
-                            selectedItem = item;
-                          });
-                        },
-                        fieldViewBuilder:
-                            (context, controller, focusNode, onSubmitted) {
-                              return TextField(
-                                controller: controller,
-                                focusNode: focusNode,
-                                decoration: _inputDecoration(
-                                  'Search Master Asset',
-                                ),
-                              );
-                            },
-                        optionsViewBuilder: (context, onSelected, options) {
-                          return Align(
-                            alignment: Alignment.topLeft,
-                            child: Material(
-                              elevation: 6,
-                              child: SizedBox(
-                                width: 520,
-                                height: 280,
-                                child: ListView.builder(
-                                  padding: EdgeInsets.zero,
-                                  itemCount: options.length,
-                                  itemBuilder: (context, index) {
-                                    final item = options.elementAt(index);
-
-                                    return ListTile(
-                                      title: Text(item.name),
-                                      subtitle: Text(
-                                        '${item.itemCode} | ${item.category}',
-                                      ),
-                                      onTap: () => onSelected(item),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      if (selectedItem != null) ...[
-                        const SizedBox(height: 12),
-                        _MasterPreview(item: selectedItem!),
-                      ],
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: branch,
-                              decoration: _inputDecoration('Branch'),
-                              items: branches.map((item) {
-                                return DropdownMenuItem(
-                                  value: item,
-                                  child: Text(item),
-                                );
-                              }).toList(),
-                              onChanged: (value) async {
-                                if (value == null) return;
-                                final loadedProjects = await _loadProjects(
-                                  value,
-                                );
-                                setDialogState(() {
-                                  branch = value;
-                                  projects = loadedProjects;
-                                  project = loadedProjects.isEmpty
-                                      ? null
-                                      : loadedProjects.first;
-                                });
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: project,
-                              decoration: _inputDecoration('Project'),
-                              items: projects.map((item) {
-                                return DropdownMenuItem(
-                                  value: item,
-                                  child: Text(item),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                project = value;
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: brandController,
-                              decoration: _inputDecoration('Brand'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: modelController,
-                              decoration: _inputDecoration('Model'),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: serialController,
-                              decoration: _inputDecoration('Serial Number'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: costController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                              decoration: _inputDecoration('Cost'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: status,
-                              decoration: _inputDecoration('Status'),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'New',
-                                  child: Text('New'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Good',
-                                  child: Text('Good'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Bad',
-                                  child: Text('Bad'),
-                                ),
-                              ],
-                              onChanged: (value) {
-                                if (value == null) return;
-                                status = value;
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        controller: descriptionController,
-                        minLines: 2,
-                        maxLines: 4,
-                        decoration: _inputDecoration('Description'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton.icon(
-                  onPressed:
-                      selectedItem == null || branch == null || project == null
-                      ? null
-                      : () => Navigator.pop(context, true),
-                  icon: const Icon(Icons.add, color: Colors.white),
-                  label: const Text(
-                    'Add Asset',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryColor,
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WebAssetAddPage(initialBranch: selectedBranch),
+      ),
     );
 
-    if (result != true ||
-        selectedItem == null ||
-        branch == null ||
-        project == null) {
-      brandController.dispose();
-      modelController.dispose();
-      serialController.dispose();
-      costController.dispose();
-      descriptionController.dispose();
-      return;
+    if (result == true) {
+      await _loadData();
     }
-
-    final generatedCode = await _generateAssetCode(selectedItem!.itemCode);
-    final cost = double.tryParse(costController.text.replaceAll(',', '')) ?? 0;
-    final createdAt = DateTime.now().toUtc().add(const Duration(hours: 4));
-
-    await supabase.from('asset_stock_taking').insert({
-      'name': selectedItem!.name,
-      'asset_code': selectedItem!.itemCode,
-      'item_code': generatedCode,
-      'category': selectedItem!.category,
-      'sub_category': selectedItem!.subCategory,
-      'classification': selectedItem!.classification,
-      'asset_classification': selectedItem!.assetClassification,
-      'asset_inventory': selectedItem!.assetInventory,
-      'location': branch,
-      'project_name': project,
-      'status': status,
-      'brand': brandController.text,
-      'model': modelController.text,
-      'serial_no': serialController.text,
-      'description': descriptionController.text,
-      'has_warranty': false,
-      'warranty_description': '',
-      'cost': cost,
-      'image_path': null,
-      'created_at': createdAt.toIso8601String(),
-    });
-
-    brandController.dispose();
-    modelController.dispose();
-    serialController.dispose();
-    costController.dispose();
-    descriptionController.dispose();
-
-    await _loadData();
   }
 
   Future<void> _exportAssets() async {
@@ -466,13 +130,13 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   Future<void> _printAssets() async {
-    final printable = visibleAssets.where((asset) {
+    final printableAssets = visibleAssets.where((asset) {
       return AssetClassificationUtils.canPrintBarcode(
         asset.assetClassification,
       );
     }).toList();
 
-    if (printable.isEmpty) {
+    if (printableAssets.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No printable assets found')),
@@ -480,130 +144,91 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       return;
     }
 
-    final pdf = await BarcodePrintService.generateBarcodePdf(assets: printable);
+    final classification = await _selectPrintClassification(printableAssets);
+    if (classification == null) return;
+
+    final assetsToPrint = classification == '__all__'
+        ? printableAssets
+        : printableAssets.where((asset) {
+            return asset.assetClassification.trim().toLowerCase() ==
+                classification.trim().toLowerCase();
+          }).toList();
+
+    if (assetsToPrint.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No assets found for this print option')),
+      );
+      return;
+    }
+
+    final pdf = await BarcodePrintService.generateBarcodePdf(
+      assets: assetsToPrint,
+    );
     await Printing.layoutPdf(onLayout: (_) async => pdf);
   }
 
-  Future<void> _showAssetDetails(AssetStockModel asset) async {
-    await showDialog<void>(
+  Future<String?> _selectPrintClassification(
+    List<AssetStockModel> printableAssets,
+  ) async {
+    final classifications =
+        printableAssets
+            .map((asset) => asset.assetClassification.trim())
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+
+    return showDialog<String>(
       context: context,
       builder: (context) {
         return AlertDialog(
           backgroundColor: Colors.white,
-          title: const Text('Asset Details'),
+          title: const Text('Print Barcodes'),
           content: SizedBox(
-            width: 760,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _AssetImage(path: asset.imagePath, size: 140),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              asset.name,
-                              style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(asset.itemCode),
-                            const SizedBox(height: 12),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                _DetailChip(
-                                  label: asset.classification.isEmpty
-                                      ? 'No Classification'
-                                      : asset.classification,
-                                  color: _classificationColor(
-                                    asset.classification,
-                                  ),
-                                ),
-                                _DetailChip(
-                                  label: asset.assetClassification.isEmpty
-                                      ? 'No Asset Classification'
-                                      : asset.assetClassification,
-                                  color: AppColors.primaryColor,
-                                ),
-                                _StatusPill(status: asset.status),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 22),
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: [
-                      _DetailField(label: 'Branch', value: asset.location),
-                      _DetailField(label: 'Project', value: asset.projectName),
-                      _DetailField(label: 'Category', value: asset.category),
-                      _DetailField(
-                        label: 'Sub Category',
-                        value: asset.subCategory,
-                      ),
-                      _DetailField(label: 'Brand', value: asset.brand),
-                      _DetailField(label: 'Model', value: asset.model),
-                      _DetailField(label: 'Serial No', value: asset.serialNo),
-                      _DetailField(
-                        label: 'Cost',
-                        value: asset.cost.toStringAsFixed(2),
-                      ),
-                      _DetailField(
-                        label: 'Description',
-                        value: asset.description,
-                        wide: true,
-                      ),
-                      _DetailField(
-                        label: 'Warranty',
-                        value: asset.hasWarranty
-                            ? (asset.warrantyDescription.isEmpty
-                                  ? 'Yes'
-                                  : asset.warrantyDescription)
-                            : 'No',
-                        wide: true,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.select_all),
+                  title: const Text('All printable classifications'),
+                  subtitle: Text('${printableAssets.length} assets'),
+                  onTap: () => Navigator.pop(context, '__all__'),
+                ),
+                const Divider(),
+                ...classifications.map((classification) {
+                  final count = printableAssets.where((asset) {
+                    return asset.assetClassification.trim().toLowerCase() ==
+                        classification.toLowerCase();
+                  }).length;
+
+                  return ListTile(
+                    leading: const Icon(Icons.qr_code_2_outlined),
+                    title: Text(classification),
+                    subtitle: Text('$count assets'),
+                    onTap: () => Navigator.pop(context, classification),
+                  );
+                }),
+              ],
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                _transferAsset(asset);
-              },
-              icon: const Icon(Icons.swap_horiz, color: Colors.white),
-              label: const Text(
-                'Transfer',
-                style: TextStyle(color: Colors.white),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryColor,
-              ),
+              child: const Text('Cancel'),
             ),
           ],
         );
       },
+    );
+  }
+
+  Future<void> _showAssetDetails(AssetStockModel asset) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) =>
+          WebAssetQuickViewDialog(asset: asset, onRefresh: _loadData),
     );
   }
 
@@ -716,12 +341,15 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       },
     );
 
-    if (result != true || project == null) return;
+    final targetProject = project;
 
-    await supabase
-        .from('asset_stock_taking')
-        .update({'location': branch, 'project_name': project})
-        .eq('item_code', asset.itemCode);
+    if (result != true || targetProject == null) return;
+
+    await webRepository.transferAsset(
+      itemCode: asset.itemCode,
+      branch: branch,
+      project: targetProject,
+    );
 
     await _loadData();
   }
@@ -778,10 +406,10 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
 
     if (result != true) return;
 
-    await supabase
-        .from('asset_stock_taking')
-        .update({'status': 'Disposed'})
-        .eq('item_code', asset.itemCode);
+    await webRepository.updateStatus(
+      itemCode: asset.itemCode,
+      status: 'Disposed',
+    );
 
     disposeToController.dispose();
     notesController.dispose();
@@ -890,10 +518,10 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
 
     if (result != true) return;
 
-    await supabase
-        .from('asset_stock_taking')
-        .update({'status': 'Maintenance'})
-        .eq('item_code', asset.itemCode);
+    await webRepository.updateStatus(
+      itemCode: asset.itemCode,
+      status: 'Maintenance',
+    );
 
     titleController.dispose();
     detailsController.dispose();
@@ -925,61 +553,62 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       backgroundColor: const Color(0xffedf1f6),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          return ClipRect(
-            child: Transform.scale(
-              scale: pageScale,
-              alignment: Alignment.topLeft,
-              child: SizedBox(
-                width: constraints.maxWidth / pageScale,
-                height: constraints.maxHeight / pageScale,
-                child: Row(
+          return Row(
+            children: [
+              _Sidebar(
+                section: selectedSection,
+                onSelected: (section) {
+                  setState(() {
+                    selectedSection = section;
+                  });
+                },
+              ),
+              Expanded(
+                child: Column(
                   children: [
-                    _Sidebar(
-                      section: selectedSection,
-                      onSelected: (section) {
+                    _TopBar(
+                      selectedBranch: selectedBranch,
+                      branches: branches,
+                      onBranchChanged: (value) {
                         setState(() {
-                          selectedSection = section;
+                          selectedBranch = value;
                         });
                       },
+                      onAssets: () {
+                        setState(() {
+                          selectedSection = WebAssetSection.assets;
+                        });
+                      },
+                      onAddAsset: _addAsset,
+                      onExport: _exportAssets,
+                      onPrint: _printAssets,
+                      onRefresh: _loadData,
                     ),
                     Expanded(
-                      child: Column(
-                        children: [
-                          _TopBar(
-                            selectedBranch: selectedBranch,
-                            branches: branches,
-                            onBranchChanged: (value) {
-                              setState(() {
-                                selectedBranch = value;
-                              });
-                            },
-                            onAssets: () {
-                              setState(() {
-                                selectedSection = WebAssetSection.assets;
-                              });
-                            },
-                            onAddAsset: _addAsset,
-                            onExport: _exportAssets,
-                            onPrint: _printAssets,
-                            onRefresh: _loadData,
-                          ),
-                          Expanded(
-                            child: loading
-                                ? const Center(
-                                    child: CircularProgressIndicator(),
-                                  )
-                                : SingleChildScrollView(
-                                    padding: const EdgeInsets.all(20),
-                                    child: _content(),
+                      child: loading
+                          ? const Center(child: CircularProgressIndicator())
+                          : SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(
+                                28,
+                                24,
+                                28,
+                                40,
+                              ),
+                              child: Align(
+                                alignment: Alignment.topLeft,
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 1680,
                                   ),
-                          ),
-                        ],
-                      ),
+                                  child: _content(),
+                                ),
+                              ),
+                            ),
                     ),
                   ],
                 ),
               ),
-            ),
+            ],
           );
         },
       ),
@@ -1029,14 +658,14 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       children: [
         const Text(
           'Dashboard',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w500),
+          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 4),
         const Text(
           'dashboard & statistics',
           style: TextStyle(fontSize: 16, color: AppColors.subText),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 22),
         Row(
           children: [
             Expanded(
@@ -1048,7 +677,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                 subtitle: 'Total Assets: ${visibleAssets.length}',
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 20),
             Expanded(
               child: _MetricTile(
                 icon: Icons.payments_outlined,
@@ -1058,7 +687,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                 subtitle: 'AED',
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 20),
             Expanded(
               child: _MetricTile(
                 icon: Icons.delete_outline,
@@ -1068,7 +697,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                 subtitle: 'Archived in place',
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 20),
             Expanded(
               child: _MetricTile(
                 icon: Icons.build,
@@ -1080,16 +709,16 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
             ),
           ],
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 24),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(flex: 6, child: _categoryPanel()),
-            const SizedBox(width: 18),
+            const SizedBox(width: 24),
             Expanded(flex: 5, child: _alertPanel()),
           ],
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 24),
         _assetsPanel(limit: 8),
       ],
     );
@@ -1154,12 +783,12 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
         ],
       ),
       child: SizedBox(
-        height: 300,
+        height: 360,
         child: GridView.builder(
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 7,
-            childAspectRatio: 1.45,
+            childAspectRatio: 1.55,
           ),
           itemCount: 35,
           itemBuilder: (context, index) {
@@ -1260,8 +889,8 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(description),
-              const SizedBox(height: 18),
+              //  Text(description),
+              /*   const SizedBox(height: 18),
               ElevatedButton.icon(
                 onPressed: visibleAssets.isEmpty
                     ? null
@@ -1278,10 +907,10 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                     vertical: 16,
                   ),
                 ),
-              ),
+              ),*/
               const SizedBox(height: 20),
               Text(
-                'Assets Pending $title',
+                'Select Asset For $title',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
@@ -1333,21 +962,21 @@ class _TopBar extends StatelessWidget {
     final branchItems = ['__all__', ...branches];
 
     return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 22),
+      height: 82,
+      padding: const EdgeInsets.symmetric(horizontal: 28),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
-          Image.asset('assets/images/icon.png', height: 42, width: 42),
-          const SizedBox(width: 12),
+          Image.asset('assets/images/icon.png', height: 50, width: 58),
+          const SizedBox(width: 14),
           const Text(
             'Asset Stock Taking',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(width: 24),
+          const SizedBox(width: 32),
           _TopNavIcon(
             icon: Icons.inventory_2_outlined,
             label: 'Assets',
@@ -1370,7 +999,7 @@ class _TopBar extends StatelessWidget {
           ),
           const Spacer(),
           SizedBox(
-            width: 190,
+            width: 230,
             child: DropdownButtonFormField<String>(
               initialValue: branchValue,
               isExpanded: true,
@@ -1409,7 +1038,7 @@ class _Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 260,
+      width: 290,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(right: BorderSide(color: AppColors.border)),
@@ -1419,13 +1048,13 @@ class _Sidebar extends StatelessWidget {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(22, 24, 18, 20),
+            padding: const EdgeInsets.fromLTRB(28, 28, 22, 24),
             color: AppColors.primaryColor,
             child: const Text(
               'Al Ain Pharmacy',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 23,
+                fontSize: 25,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -1436,20 +1065,20 @@ class _Sidebar extends StatelessWidget {
             selected: section == WebAssetSection.dashboard,
             onTap: () => onSelected(WebAssetSection.dashboard),
           ),
-          _SidebarItem(
+          /* _SidebarItem(
             icon: Icons.notifications_none,
             label: 'Alerts',
             badge: '1',
             selected: false,
             onTap: () => onSelected(WebAssetSection.dashboard),
-          ),
+          ),*/
           _SidebarGroup(selected: section, onSelected: onSelected),
-          _SidebarItem(
+          /*  _SidebarItem(
             icon: Icons.list_alt_outlined,
             label: 'Lists',
             selected: false,
             onTap: () => onSelected(WebAssetSection.assets),
-          ),
+          ),*/
           _SidebarItem(
             icon: Icons.description_outlined,
             label: 'Reports',
@@ -1541,9 +1170,9 @@ class _SidebarItem extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        height: 48,
+        height: 52,
         color: selected ? const Color(0xffffbd0a) : Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 22),
+        padding: const EdgeInsets.symmetric(horizontal: 28),
         child: Row(
           children: [
             Icon(
@@ -1551,8 +1180,8 @@ class _SidebarItem extends StatelessWidget {
               size: 22,
               color: selected ? Colors.deepOrange : Colors.deepOrange,
             ),
-            const SizedBox(width: 14),
-            Expanded(child: Text(label, style: const TextStyle(fontSize: 15))),
+            const SizedBox(width: 16),
+            Expanded(child: Text(label, style: const TextStyle(fontSize: 16))),
             if (badge != null)
               CircleAvatar(
                 radius: 14,
@@ -1587,9 +1216,9 @@ class _SidebarSubItem extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        height: 39,
+        height: 43,
         color: selected ? const Color(0xfffff4ce) : Colors.white,
-        padding: const EdgeInsets.only(left: 48, right: 18),
+        padding: const EdgeInsets.only(left: 56, right: 22),
         child: Row(
           children: [
             Icon(icon, size: 20, color: Colors.deepOrange),
@@ -1653,14 +1282,14 @@ class _MetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 116,
+      height: 136,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Container(
-            height: 96,
-            margin: const EdgeInsets.only(left: 18, top: 12),
-            padding: const EdgeInsets.fromLTRB(78, 18, 18, 16),
+            height: 112,
+            margin: const EdgeInsets.only(left: 22, top: 14),
+            padding: const EdgeInsets.fromLTRB(92, 22, 24, 18),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(4),
@@ -1679,7 +1308,7 @@ class _MetricTile extends StatelessWidget {
                     title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 15),
+                    style: const TextStyle(fontSize: 17),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -1689,9 +1318,9 @@ class _MetricTile extends StatelessWidget {
                   children: [
                     Text(
                       value,
-                      style: const TextStyle(fontSize: 24, height: 1.05),
+                      style: const TextStyle(fontSize: 30, height: 1.05),
                     ),
-                    Text(subtitle, style: const TextStyle(fontSize: 12)),
+                    Text(subtitle, style: const TextStyle(fontSize: 14)),
                   ],
                 ),
               ],
@@ -1699,10 +1328,10 @@ class _MetricTile extends StatelessWidget {
           ),
           Positioned(
             top: 0,
-            left: 30,
+            left: 34,
             child: Container(
-              width: 56,
-              height: 56,
+              width: 66,
+              height: 66,
               decoration: BoxDecoration(
                 color: color,
                 borderRadius: BorderRadius.circular(7),
@@ -1714,7 +1343,7 @@ class _MetricTile extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Icon(icon, color: Colors.white, size: 30),
+              child: Icon(icon, color: Colors.white, size: 34),
             ),
           ),
         ],
@@ -1743,7 +1372,7 @@ class _Panel extends StatelessWidget {
         children: [
           if (title.isNotEmpty || trailing != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 18),
               child: Row(
                 children: [
                   if (title.isNotEmpty)
@@ -1753,7 +1382,7 @@ class _Panel extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 19,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -1765,7 +1394,7 @@ class _Panel extends StatelessWidget {
             ),
           if (title.isNotEmpty || trailing != null)
             const Divider(height: 1, color: AppColors.border),
-          Padding(padding: const EdgeInsets.all(18), child: child),
+          Padding(padding: const EdgeInsets.all(24), child: child),
         ],
       ),
     );
@@ -1830,106 +1459,6 @@ class _TransferInfoBox extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: AppColors.subText),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MasterPreview extends StatelessWidget {
-  final AssetItemModel item;
-
-  const _MasterPreview({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xfff6f8fb),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: _classificationColor(item.classification),
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text('${item.itemCode} | ${item.category}'),
-              ],
-            ),
-          ),
-          Text(item.assetClassification),
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailChip extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _DetailChip({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: color, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-}
-
-class _DetailField extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool wide;
-
-  const _DetailField({
-    required this.label,
-    required this.value,
-    this.wide = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: wide ? 720 : 230,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.subText,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(value.trim().isEmpty ? '-' : value),
         ],
       ),
     );
@@ -2002,7 +1531,9 @@ class _AssetTableRow extends StatelessWidget {
                     width: 10,
                     height: 10,
                     decoration: BoxDecoration(
-                      color: _classificationColor(asset.classification),
+                      color: WebAssetColors.classification(
+                        asset.classification,
+                      ),
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -2071,17 +1602,16 @@ class _AssetTableRow extends StatelessWidget {
 
 class _AssetImage extends StatelessWidget {
   final String? path;
-  final double size;
 
-  const _AssetImage({this.path, this.size = 40});
+  const _AssetImage({this.path});
 
   @override
   Widget build(BuildContext context) {
     final hasImage = path != null && path!.trim().isNotEmpty;
 
     return Container(
-      width: size,
-      height: size,
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
         color: AppColors.backgroundWidget,
         borderRadius: BorderRadius.circular(4),
