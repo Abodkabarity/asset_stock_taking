@@ -8,6 +8,7 @@ import 'package:printing/printing.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/barcode_print_service.dart';
 import '../../core/utils/asset_classification_utils.dart';
+import '../../core/utils/status_list.dart';
 import '../../data/models/asset_stock_model.dart';
 import '../bloc/asset_bloc.dart';
 
@@ -53,8 +54,6 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
   String? selectedWarrantyImagePath;
 
   late bool hasWarranty;
-
-  final statuses = ['New', 'Very Good', 'Good', 'Fair', 'Bad'];
 
   @override
   void initState() {
@@ -680,7 +679,9 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
             /// STATUS
             DropdownButtonFormField<String>(
-              initialValue: selectedStatus,
+              initialValue: StatusList.statuses.contains(selectedStatus)
+                  ? selectedStatus
+                  : null,
 
               decoration: InputDecoration(
                 labelText: 'Status',
@@ -708,7 +709,7 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                 ),
               ),
 
-              items: statuses.map((e) {
+              items: StatusList.statuses.map((e) {
                 return DropdownMenuItem(value: e, child: Text(e));
               }).toList(),
 

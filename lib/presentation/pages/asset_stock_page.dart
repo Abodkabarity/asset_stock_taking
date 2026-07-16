@@ -11,6 +11,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/asset_excel_service.dart';
 import '../../core/services/barcode_print_service.dart';
 import '../../core/utils/asset_classification_utils.dart';
+import '../../core/utils/status_list.dart';
 import '../../data/models/asset_item_model.dart';
 import '../../data/models/asset_stock_model.dart';
 import '../bloc/asset_bloc.dart';
@@ -51,8 +52,6 @@ class _AssetStockPageState extends State<AssetStockPage> {
   File? selectedWarrantyImage;
   String? selectedStatus;
   bool hasWarranty = false;
-
-  final statuses = ['New', 'Good', 'Bad'];
 
   @override
   void dispose() {
@@ -783,6 +782,7 @@ class _AssetStockPageState extends State<AssetStockPage> {
                       Row(
                         children: [
                           Expanded(
+                            flex: 2,
                             child: TextField(
                               controller: costController,
 
@@ -821,10 +821,11 @@ class _AssetStockPageState extends State<AssetStockPage> {
                           ),
                           SizedBox(width: 10),
                           Expanded(
+                            flex: 3,
                             child: DropdownButtonFormField<String>(
                               value: selectedStatus,
 
-                              items: statuses.map((e) {
+                              items: StatusList.statuses.map((e) {
                                 return DropdownMenuItem(
                                   value: e,
                                   child: Text(e),
