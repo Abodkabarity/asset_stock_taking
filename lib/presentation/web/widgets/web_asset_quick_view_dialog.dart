@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/asset_stock_model.dart';
 import '../pages/web_asset_edit_page.dart';
-import '../utils/web_page_route.dart';
 import '../pages/web_asset_view_page.dart';
+import '../utils/web_page_route.dart';
 import 'web_asset_image.dart';
 import 'web_asset_info_table.dart';
 
@@ -119,7 +119,10 @@ class WebAssetQuickViewDialog extends StatelessWidget {
                       backgroundColor: AppColors.primaryColor,
                       foregroundColor: Colors.black,
                     ),
-                    child: const Text('More Details'),
+                    child: const Text(
+                      'More Details',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
                   const SizedBox(width: 10),
                   OutlinedButton.icon(

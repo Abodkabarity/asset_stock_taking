@@ -347,63 +347,449 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
             .toList()
           ..sort();
 
-    return showDialog<String>(
+    return showGeneralDialog<String>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text('Print Barcodes'),
-          content: SizedBox(
-            width: 380,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.select_all),
-                  title: const Text('All Trackable Assets'),
-                  subtitle: Text('${printableAssets.length} assets'),
-                  onTap: () => Navigator.pop(context, '__all__'),
+      barrierDismissible: true,
+      barrierLabel: 'Close print barcodes dialog',
+      barrierColor: Colors.black.withValues(alpha: 0.48),
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return SafeArea(
+          child: Material(
+            color: Colors.transparent,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 24,
                 ),
-                const Divider(),
-                ...classifications.map((classification) {
-                  final count = printableAssets.where((asset) {
-                    return asset.classification.trim().toLowerCase() ==
-                        classification.toLowerCase();
-                  }).length;
-
-                  return ListTile(
-                    leading: Icon(
-                      Icons.circle,
-                      size: 16,
-                      color: AssetClassificationUtils.classificationColor(
-                        classification,
-                      ),
-                    ),
-                    title: Text(
-                      classification,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AssetClassificationUtils.classificationColor(
-                          classification,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 610,
+                    maxHeight: 700,
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xfff8faff),
+                      borderRadius: BorderRadius.circular(26),
+                      border: Border.all(color: const Color(0xffdfe6f2)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.16),
+                          blurRadius: 45,
+                          spreadRadius: -8,
+                          offset: const Offset(0, 22),
                         ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(26),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.fromLTRB(26, 23, 18, 21),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              border: Border(
+                                bottom: BorderSide(color: Color(0xffe4e9f2)),
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 54,
+                                  height: 54,
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Color(0xff5b7cff),
+                                        Color(0xff3156e8),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(
+                                          0xff4568f2,
+                                        ).withValues(alpha: 0.28),
+                                        blurRadius: 18,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.qr_code_2_rounded,
+                                    color: Colors.white,
+                                    size: 29,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Print Barcodes',
+                                        style: TextStyle(
+                                          fontSize: 21,
+                                          height: 1.15,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xff15213b),
+                                          letterSpacing: -0.35,
+                                        ),
+                                      ),
+                                      SizedBox(height: 7),
+                                      Text(
+                                        'Choose the assets you want to include in the barcode print.',
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          height: 1.45,
+                                          color: Color(0xff71809b),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Material(
+                                  color: const Color(0xfff2f5fa),
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: () =>
+                                        Navigator.of(dialogContext).pop(),
+                                    child: const SizedBox(
+                                      width: 40,
+                                      height: 40,
+                                      child: Icon(
+                                        Icons.close_rounded,
+                                        size: 21,
+                                        color: Color(0xff66748d),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          Flexible(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(
+                                24,
+                                22,
+                                24,
+                                12,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(5),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xffedf2ff),
+                                      borderRadius: BorderRadius.circular(19),
+                                      border: Border.all(
+                                        color: const Color(0xffdce5ff),
+                                      ),
+                                    ),
+                                    child: _PrintClassificationOption(
+                                      icon: Icons.select_all_rounded,
+                                      title: 'All Trackable Assets',
+                                      description:
+                                          'Print every asset available for barcode tracking',
+                                      count: printableAssets.length,
+                                      color: const Color(0xff4568f2),
+                                      highlighted: true,
+                                      onTap: () {
+                                        Navigator.of(
+                                          dialogContext,
+                                        ).pop('__all__');
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+
+                                  Row(
+                                    children: [
+                                      const Expanded(
+                                        child: Text(
+                                          'ASSET CLASSIFICATION',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 1.1,
+                                            color: Color(0xff8491a8),
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(0xffe0e6ef),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '${classifications.length} options',
+                                          style: const TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xff6d7b93),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+
+                                  if (classifications.isEmpty)
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                        vertical: 32,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(18),
+                                        border: Border.all(
+                                          color: const Color(0xffe1e7f0),
+                                        ),
+                                      ),
+                                      child: const Column(
+                                        children: [
+                                          Icon(
+                                            Icons.inventory_2_outlined,
+                                            size: 34,
+                                            color: Color(0xff98a5ba),
+                                          ),
+                                          SizedBox(height: 10),
+                                          Text(
+                                            'No classifications found',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xff34415a),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  else
+                                    LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        final useTwoColumns =
+                                            constraints.maxWidth >= 480;
+
+                                        if (!useTwoColumns) {
+                                          return Column(
+                                            children: classifications.map((
+                                              classification,
+                                            ) {
+                                              final count = printableAssets
+                                                  .where((asset) {
+                                                    return asset.classification
+                                                            .trim()
+                                                            .toLowerCase() ==
+                                                        classification
+                                                            .toLowerCase();
+                                                  })
+                                                  .length;
+
+                                              final classificationColor =
+                                                  AssetClassificationUtils.classificationColor(
+                                                    classification,
+                                                  );
+
+                                              return Padding(
+                                                padding: const EdgeInsets.only(
+                                                  bottom: 10,
+                                                ),
+                                                child: _PrintClassificationOption(
+                                                  icon: _classificationIcon(
+                                                    classification,
+                                                  ),
+                                                  title: classification,
+                                                  description:
+                                                      'Print assets classified as $classification',
+                                                  count: count,
+                                                  color: classificationColor,
+                                                  onTap: () {
+                                                    Navigator.of(
+                                                      dialogContext,
+                                                    ).pop(classification);
+                                                  },
+                                                ),
+                                              );
+                                            }).toList(),
+                                          );
+                                        }
+
+                                        return Wrap(
+                                          spacing: 10,
+                                          runSpacing: 10,
+                                          children: classifications.map((
+                                            classification,
+                                          ) {
+                                            final count = printableAssets.where(
+                                              (asset) {
+                                                return asset.classification
+                                                        .trim()
+                                                        .toLowerCase() ==
+                                                    classification
+                                                        .toLowerCase();
+                                              },
+                                            ).length;
+
+                                            final classificationColor =
+                                                AssetClassificationUtils.classificationColor(
+                                                  classification,
+                                                );
+
+                                            return SizedBox(
+                                              width:
+                                                  (constraints.maxWidth - 10) /
+                                                  2,
+                                              child: _PrintClassificationOption(
+                                                icon: _classificationIcon(
+                                                  classification,
+                                                ),
+                                                title: classification,
+                                                description:
+                                                    'Print $classification assets',
+                                                count: count,
+                                                color: classificationColor,
+                                                compact: true,
+                                                onTap: () {
+                                                  Navigator.of(
+                                                    dialogContext,
+                                                  ).pop(classification);
+                                                },
+                                              ),
+                                            );
+                                          }).toList(),
+                                        );
+                                      },
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.fromLTRB(24, 14, 24, 19),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              border: Border(
+                                top: BorderSide(color: Color(0xffe4e9f2)),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.info_outline_rounded,
+                                  size: 17,
+                                  color: Color(0xff8b98ac),
+                                ),
+                                const SizedBox(width: 7),
+                                const Expanded(
+                                  child: Text(
+                                    'A PDF preview will open before printing.',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      color: Color(0xff7a879c),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.of(dialogContext).pop(),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: const Color(0xff53627a),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 13,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Cancel',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    subtitle: Text('$count assets'),
-                    onTap: () => Navigator.pop(context, classification),
-                  );
-                }),
-              ],
+                  ),
+                ),
+              ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+          reverseCurve: Curves.easeInCubic,
+        );
+
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.92, end: 1).animate(curvedAnimation),
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.035),
+                end: Offset.zero,
+              ).animate(curvedAnimation),
+              child: child,
             ),
-          ],
+          ),
         );
       },
     );
+  }
+
+  IconData _classificationIcon(String classification) {
+    switch (classification.trim().toLowerCase()) {
+      case 'confidential':
+        return Icons.lock_outline_rounded;
+
+      case 'public':
+        return Icons.public_rounded;
+
+      case 'restricted':
+        return Icons.gpp_maybe_outlined;
+
+      default:
+        return Icons.label_outline_rounded;
+    }
   }
 
   Future<void> _showAssetDetails(AssetStockModel asset) async {
@@ -1353,7 +1739,10 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                   backgroundColor: AppColors.primaryColor,
                   foregroundColor: Colors.white,
                 ),
-                child: const Text('More Details'),
+                child: const Text(
+                  'More Details',
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
             OutlinedButton(
               onPressed: () => Navigator.pop(context),
@@ -1367,9 +1756,15 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
 
   Widget _alertPanel() {
     final monthStart = DateTime(alertMonth.year, alertMonth.month);
-    final gridStart = monthStart.subtract(
-      Duration(days: monthStart.weekday % 7),
-    );
+
+    final leadingDays = monthStart.weekday % 7;
+
+    final gridStart = monthStart.subtract(Duration(days: leadingDays));
+
+    final daysInMonth = DateTime(alertMonth.year, alertMonth.month + 1, 0).day;
+
+    final calendarRows = ((leadingDays + daysInMonth) / 7).ceil();
+    final calendarItemCount = calendarRows * 7;
     final monthLabel =
         '${_monthName(alertMonth.month).toUpperCase()} ${alertMonth.year}';
     final recordsByDate = <String, List<Map<String, dynamic>>>{};
@@ -1466,8 +1861,12 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text(
-                  'month',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  'Month',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ],
@@ -1485,14 +1884,15 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
             ],
           ),
           SizedBox(
-            height: 352,
+            height: calendarRows * 78.0,
             child: GridView.builder(
+              padding: EdgeInsets.zero,
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 7,
-                childAspectRatio: 1.15,
+                mainAxisExtent: 78,
               ),
-              itemCount: 42,
+              itemCount: calendarItemCount,
               itemBuilder: (context, index) {
                 final date = gridStart.add(Duration(days: index));
                 final isCurrentMonth = date.month == alertMonth.month;
@@ -2957,35 +3357,8 @@ class _Sidebar extends StatelessWidget {
                     selected: false,
                     onTap: () => onSelected(WebAssetSection.dashboard),
                   ),
-                  _SidebarItem(
-                    icon: Icons.help_outline_rounded,
-                    label: 'Help / Support',
-                    selected: false,
-                    onTap: () {},
-                  ),
                 ],
               ),
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.all(18),
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .06),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withValues(alpha: .08)),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.auto_graph_rounded, color: AppColors.cyan),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Smart asset control',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                ),
-              ],
             ),
           ),
         ],
@@ -3309,7 +3682,7 @@ class _TopNavIcon extends StatelessWidget {
   }
 }
 
-class _MetricTile extends StatelessWidget {
+class _MetricTile extends StatefulWidget {
   final IconData icon;
   final Color color;
   final String title;
@@ -3325,83 +3698,244 @@ class _MetricTile extends StatelessWidget {
   });
 
   @override
+  State<_MetricTile> createState() => _MetricTileState();
+}
+
+class _MetricTileState extends State<_MetricTile> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 112,
-      child: WebHoverSurface(
-        padding: const EdgeInsets.fromLTRB(16, 15, 18, 15),
-        child: Row(
-          children: [
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [color.withValues(alpha: .72), color],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.28),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Icon(icon, color: Colors.white, size: 29),
-            ),
-            const SizedBox(width: 15),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.text,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        value,
-                        maxLines: 1,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          height: 1,
-                          color: AppColors.text,
-                          fontWeight: FontWeight.w800,
+    return MouseRegion(
+      cursor: SystemMouseCursors.basic,
+      onEnter: (_) {
+        if (!_isHovered) {
+          setState(() => _isHovered = true);
+        }
+      },
+      onExit: (_) {
+        if (_isHovered) {
+          setState(() => _isHovered = false);
+        }
+      },
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: _isHovered ? 1 : 0),
+        duration: const Duration(milliseconds: 360),
+        curve: Curves.easeOutCubic,
+        builder: (context, animationValue, child) {
+          final hoverValue = animationValue.clamp(0.0, 1.0);
+          final rotationAngle = 0.785398 * hoverValue;
+
+          final borderColor = Color.lerp(
+            AppColors.border,
+            widget.color.withValues(alpha: 0.48),
+            hoverValue,
+          )!;
+
+          final cardColor = Color.lerp(
+            Colors.white,
+            widget.color.withValues(alpha: 0.035),
+            hoverValue,
+          )!;
+
+          return Transform.translate(
+            offset: Offset(0, -6 * hoverValue),
+            child: Transform.scale(
+              scale: 1 + (0.012 * hoverValue),
+              alignment: Alignment.center,
+              child: SizedBox(
+                height: 112,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: cardColor,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: borderColor, width: 1),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(
+                                alpha: 0.045 + (0.025 * hoverValue),
+                              ),
+                              blurRadius: 12 + (10 * hoverValue),
+                              offset: Offset(0, 5 + (5 * hoverValue)),
+                            ),
+                            BoxShadow(
+                              color: widget.color.withValues(
+                                alpha: 0.12 * hoverValue,
+                              ),
+                              blurRadius: 26,
+                              spreadRadius: -5,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 10.5,
-                            height: 1.25,
-                            color: AppColors.subText,
+                    ),
+
+                    Positioned(
+                      top: 0,
+                      left: 28,
+                      right: 28,
+                      child: Opacity(
+                        opacity: hoverValue,
+                        child: Container(
+                          height: 3,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                widget.color.withValues(alpha: 0),
+                                widget.color,
+                                widget.color.withValues(alpha: 0),
+                              ],
+                            ),
+                            borderRadius: const BorderRadius.vertical(
+                              bottom: Radius.circular(20),
+                            ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+
+                    Positioned(
+                      right: -25,
+                      bottom: -45,
+                      child: IgnorePointer(
+                        child: Opacity(
+                          opacity: 0.025 + (0.035 * hoverValue),
+                          child: Container(
+                            width: 130,
+                            height: 130,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: widget.color,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    Positioned(
+                      left: 18,
+                      top: 25 - (10 * hoverValue),
+                      child: Transform.rotate(
+                        angle: rotationAngle,
+                        child: Container(
+                          width: 60,
+                          height: 60,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color.lerp(
+                                  widget.color.withValues(alpha: 0.76),
+                                  widget.color.withValues(alpha: 0.88),
+                                  hoverValue,
+                                )!,
+                                widget.color,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(
+                              16 - (3 * hoverValue),
+                            ),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.22),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: widget.color.withValues(
+                                  alpha: 0.25 + (0.12 * hoverValue),
+                                ),
+                                blurRadius: 15 + (7 * hoverValue),
+                                offset: Offset(0, 7 + (3 * hoverValue)),
+                              ),
+                            ],
+                          ),
+                          child: Transform.rotate(
+                            angle: -rotationAngle,
+                            child: Icon(
+                              widget.icon,
+                              color: Colors.white,
+                              size: 29 + (2 * hoverValue),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    Positioned.fill(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(96, 15, 16, 15),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                height: 1.1,
+                                color: Color.lerp(
+                                  AppColors.text,
+                                  widget.color,
+                                  hoverValue * 0.55,
+                                ),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Flexible(
+                                  flex: 0,
+                                  child: Text(
+                                    widget.value,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 23,
+                                      height: 1,
+                                      color: AppColors.text,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.35,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 7),
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(bottom: 1),
+                                    child: Text(
+                                      widget.subtitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 10.5,
+                                        height: 1.2,
+                                        color: AppColors.subText,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -4825,6 +5359,197 @@ class _DialogAssetHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PrintClassificationOption extends StatefulWidget {
+  final IconData icon;
+  final String title;
+  final String description;
+  final int count;
+  final Color color;
+  final VoidCallback onTap;
+  final bool highlighted;
+  final bool compact;
+
+  const _PrintClassificationOption({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.count,
+    required this.color,
+    required this.onTap,
+    this.highlighted = false,
+    this.compact = false,
+  });
+
+  @override
+  State<_PrintClassificationOption> createState() =>
+      _PrintClassificationOptionState();
+}
+
+class _PrintClassificationOptionState
+    extends State<_PrintClassificationOption> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) {
+        if (!_hovered) {
+          setState(() => _hovered = true);
+        }
+      },
+      onExit: (_) {
+        if (_hovered) {
+          setState(() => _hovered = false);
+        }
+      },
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: _hovered ? 1 : 0),
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        builder: (context, value, child) {
+          return Transform.translate(
+            offset: Offset(0, -2.5 * value),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: widget.onTap,
+                borderRadius: BorderRadius.circular(16),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: widget.compact ? 14 : 16,
+                    vertical: widget.compact ? 14 : 15,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Color.lerp(
+                      Colors.white,
+                      widget.color.withValues(alpha: 0.055),
+                      value,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Color.lerp(
+                        const Color(0xffe0e6ef),
+                        widget.color.withValues(alpha: 0.48),
+                        value,
+                      )!,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: widget.color.withValues(alpha: 0.13 * value),
+                        blurRadius: 20,
+                        spreadRadius: -8,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 220),
+                        width: widget.compact ? 43 : 48,
+                        height: widget.compact ? 43 : 48,
+                        decoration: BoxDecoration(
+                          color: widget.color.withValues(
+                            alpha: widget.highlighted
+                                ? 0.14
+                                : 0.10 + (0.05 * value),
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(
+                          widget.icon,
+                          size: widget.compact ? 21 : 23,
+                          color: widget.color,
+                        ),
+                      ),
+                      const SizedBox(width: 13),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              widget.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                height: 1.15,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xff25324a),
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              widget.description,
+                              maxLines: widget.compact ? 1 : 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                height: 1.35,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xff8190a6),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: widget.color.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              widget.count.toString(),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: widget.color,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 7),
+                          AnimatedSlide(
+                            duration: const Duration(milliseconds: 220),
+                            offset: _hovered
+                                ? Offset.zero
+                                : const Offset(-0.18, 0),
+                            child: Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 18,
+                              color: Color.lerp(
+                                const Color(0xffa1acbd),
+                                widget.color,
+                                value,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
