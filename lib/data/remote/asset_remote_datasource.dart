@@ -71,7 +71,6 @@ class AssetRemoteDatasource {
       /// RESEQUENCE
       /// =========================
     }
-    await Future.delayed(const Duration(milliseconds: 800));
 
     /// =========================
     /// BUILD UPLOAD LIST

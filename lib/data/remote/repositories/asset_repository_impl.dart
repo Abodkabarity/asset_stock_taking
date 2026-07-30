@@ -10,6 +10,7 @@ class AssetRepositoryImpl implements AssetRepository {
 
   final LocalAssetDatasource localDatasource;
   final LocalMasterDatasource localMasterDatasource;
+  List<AssetItemModel>? _masterCache;
   AssetRepositoryImpl({
     required this.remoteDatasource,
     required this.localDatasource,
@@ -19,13 +20,19 @@ class AssetRepositoryImpl implements AssetRepository {
   @override
   @override
   Future<List<AssetItemModel>> getMasterItems() async {
+    final cached = _masterCache;
+    if (cached != null) {
+      return cached;
+    }
+
     final local = localMasterDatasource.getMaster();
 
     if (local.isNotEmpty) {
+      _masterCache = local;
       return local;
     }
 
-    return await syncMaster();
+    return syncMaster();
   }
 
   @override
@@ -54,22 +61,7 @@ class AssetRepositoryImpl implements AssetRepository {
     /// SERVER
     await remoteDatasource.uploadAssets(changedItems);
 
-    /// MARK AS SYNCED
-    /// MARK AS SYNCED
-    for (final item in changedItems) {
-      /// DELETED ITEM
-      if (item.isDeleted) {
-        /// REMOVE COMPLETELY FROM LOCAL
-        await localDatasource.removeAssetPermanently(itemCode: item.itemCode);
-
-        continue;
-      }
-
-      /// NORMAL ITEM
-      await localDatasource.saveSyncedAsset(
-        item.copyWith(isSynced: true, isDeleted: false),
-      );
-    }
+    await localDatasource.applyUploadedAssets(changedItems);
   }
 
   @override
@@ -185,6 +177,7 @@ class AssetRepositoryImpl implements AssetRepository {
     }
 
     final merged = map.values.toList();
+    _masterCache = merged;
 
     await localMasterDatasource.saveMaster(merged);
 
@@ -251,13 +244,9 @@ class AssetRepositoryImpl implements AssetRepository {
       project: project,
     );
 
-    /// SAVE ONLINE LOCALLY AS SYNCED
-    /// SAVE ONLINE LOCALLY AS SYNCED
-    for (final item in online) {
-      await localDatasource.saveSyncedAsset(
-        item.copyWith(isSynced: true, isDeleted: false),
-      );
-    }
+    /// Persist the server snapshot in one Hive transaction. Pending local
+    /// changes are preserved by the datasource.
+    await localDatasource.saveSyncedAssets(online);
 
     /// IMPORTANT
     /// RETURN LOCAL AFTER SAVING

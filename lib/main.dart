@@ -15,15 +15,15 @@ void main() async {
 
   await Hive.initFlutter();
 
-  await Hive.openBox('asset_box');
-  await Hive.openBox('master_box');
-
-  await Hive.openBox('settings_box');
-
-  await Supabase.initialize(
-    url: SupabaseConstants.supabaseUrl,
-    anonKey: SupabaseConstants.supabaseKey,
-  );
+  await Future.wait([
+    Hive.openBox('asset_box'),
+    Hive.openBox('master_box'),
+    Hive.openBox('settings_box'),
+    Supabase.initialize(
+      url: SupabaseConstants.supabaseUrl,
+      anonKey: SupabaseConstants.supabaseKey,
+    ),
+  ]);
   setup();
 
   runApp(const MyApp());

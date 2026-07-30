@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -52,9 +53,11 @@ class _AssetStockPageState extends State<AssetStockPage> {
   File? selectedWarrantyImage;
   String? selectedStatus;
   bool hasWarranty = false;
+  Timer? _searchDebounce;
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     assetCodeController.dispose();
 
     brandController.dispose();
@@ -214,6 +217,8 @@ class _AssetStockPageState extends State<AssetStockPage> {
     final image = await picker.pickImage(
       source: ImageSource.camera,
       imageQuality: 70,
+      maxWidth: 1600,
+      maxHeight: 1600,
     );
 
     if (image == null) {
@@ -237,6 +242,8 @@ class _AssetStockPageState extends State<AssetStockPage> {
     final image = await picker.pickImage(
       source: ImageSource.camera,
       imageQuality: 70,
+      maxWidth: 1600,
+      maxHeight: 1600,
     );
 
     if (image == null) {
@@ -548,65 +555,65 @@ class _AssetStockPageState extends State<AssetStockPage> {
         ],
       ),
 
-      body: SingleChildScrollView(
-        child: SizedBox(
-          height: 1000,
-          child: Container(
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage("assets/images/background.png"),
-                fit: BoxFit.fill,
-              ),
-            ),
-            child: BlocBuilder<AssetBloc, AssetState>(
-              builder: (context, state) {
-                if (state.syncingMaster) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage("assets/images/background.png"),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: BlocBuilder<AssetBloc, AssetState>(
+          buildWhen: (previous, current) {
+            return previous.syncingMaster != current.syncingMaster ||
+                previous.items != current.items ||
+                previous.localAssets != current.localAssets;
+          },
+          builder: (context, state) {
+            if (state.syncingMaster && state.localAssets.isEmpty) {
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
 
-                        SizedBox(height: 20),
+                    SizedBox(height: 20),
 
-                        Text(
-                          'Loading Assets...',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      'Loading Assets...',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  );
-                }
-                final visibleAssets = state.localAssets.where((e) {
-                  if (e.isDeleted) {
-                    return false;
-                  }
+                  ],
+                ),
+              );
+            }
+            final visibleAssets = state.localAssets.where((e) {
+              if (e.isDeleted) {
+                return false;
+              }
 
-                  if (searchQuery.isEmpty) {
-                    return true;
-                  }
+              if (searchQuery.isEmpty) {
+                return true;
+              }
 
-                  final search = searchQuery.toLowerCase();
-
-                  return e.name.toLowerCase().contains(search) ||
-                      e.itemCode.toLowerCase().contains(search) ||
-                      e.brand.toLowerCase().contains(search) ||
-                      e.category.toLowerCase().contains(search) ||
-                      e.subCategory.toLowerCase().contains(search) ||
-                      e.classification.toLowerCase().contains(search) ||
-                      e.assetClassification.toLowerCase().contains(search) ||
-                      e.status.toLowerCase().contains(search);
-                }).toList();
-
-                final sortedAssets = AssetBloc.sortNewestFirst(visibleAssets);
-                return Padding(
+              return e.name.toLowerCase().contains(searchQuery) ||
+                  e.itemCode.toLowerCase().contains(searchQuery) ||
+                  e.brand.toLowerCase().contains(searchQuery) ||
+                  e.category.toLowerCase().contains(searchQuery) ||
+                  e.subCategory.toLowerCase().contains(searchQuery) ||
+                  e.classification.toLowerCase().contains(searchQuery) ||
+                  e.assetClassification.toLowerCase().contains(searchQuery) ||
+                  e.status.toLowerCase().contains(searchQuery);
+            }).toList();
+            return CustomScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              slivers: [
+                SliverPadding(
                   padding: const EdgeInsets.all(16),
-
-                  child: Column(
-                    children: [
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
                       /// SEARCH ASSET
                       Autocomplete<AssetItemModel>(
                         displayStringForOption: (option) {
@@ -1119,6 +1126,7 @@ class _AssetStockPageState extends State<AssetStockPage> {
                                 selectedWarrantyImage!,
                                 height: 140,
                                 width: double.infinity,
+                                cacheWidth: 600,
                                 fit: BoxFit.cover,
                               ),
                             ),
@@ -1211,6 +1219,7 @@ class _AssetStockPageState extends State<AssetStockPage> {
                               selectedImage!,
                               height: 180,
                               width: double.infinity,
+                              cacheWidth: 800,
                               fit: BoxFit.cover,
                             ),
                           ),
@@ -1219,9 +1228,16 @@ class _AssetStockPageState extends State<AssetStockPage> {
                         controller: searchController,
 
                         onChanged: (value) {
-                          setState(() {
-                            searchQuery = value.toLowerCase();
-                          });
+                          _searchDebounce?.cancel();
+                          _searchDebounce = Timer(
+                            const Duration(milliseconds: 180),
+                            () {
+                              if (!mounted) return;
+                              setState(() {
+                                searchQuery = value.trim().toLowerCase();
+                              });
+                            },
+                          );
                         },
 
                         decoration: InputDecoration(
@@ -1272,39 +1288,33 @@ class _AssetStockPageState extends State<AssetStockPage> {
                       ),
 
                       const SizedBox(height: 12),
-
-                      /// LOCAL LIST
-                      Expanded(
-                        child: sortedAssets.isEmpty
-                            ? const Center(child: Text('No Local Assets'))
-                            : ListView.builder(
-                                itemCount: sortedAssets.length,
-                                itemBuilder: (_, index) {
-                                  final item = sortedAssets[index];
-                                  return AssetCard(
-                                    item: item,
-
-                                    onDelete: () {
-                                      context.read<AssetBloc>().add(
-                                        DeleteAssetEvent(
-                                          itemCode: item.itemCode,
-
-                                          branch: widget.branch,
-
-                                          project: widget.project,
-                                        ),
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
+                    ]),
                   ),
-                );
-              },
-            ),
-          ),
+                ),
+                if (visibleAssets.isEmpty)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: Text('No Local Assets')),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                    sliver: SliverList.builder(
+                      itemCount: visibleAssets.length,
+                      itemBuilder: (_, index) {
+                        final item = visibleAssets[index];
+                        return AssetCard(
+                          key: ValueKey(item.itemCode),
+                          item: item,
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );

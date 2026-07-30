@@ -889,7 +889,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xffedf1f6),
+      backgroundColor: const Color(0xfff4f7fb),
       body: LayoutBuilder(
         builder: (context, constraints) {
           return Row(
@@ -929,16 +929,16 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                           ? const Center(child: CircularProgressIndicator())
                           : SingleChildScrollView(
                               padding: const EdgeInsets.fromLTRB(
-                                28,
-                                24,
-                                28,
-                                40,
+                                22,
+                                20,
+                                22,
+                                32,
                               ),
                               child: Align(
                                 alignment: Alignment.topLeft,
                                 child: ConstrainedBox(
                                   constraints: const BoxConstraints(
-                                    maxWidth: 1680,
+                                    maxWidth: 1540,
                                   ),
                                   child: _content(),
                                 ),
@@ -987,14 +987,18 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       children: [
         const Text(
           'Dashboard',
-          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w500),
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            color: AppColors.text,
+          ),
         ),
         const SizedBox(height: 4),
         const Text(
           'dashboard & statistics',
-          style: TextStyle(fontSize: 16, color: AppColors.subText),
+          style: TextStyle(fontSize: 13, color: AppColors.subText),
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 14),
         Row(
           children: [
             Expanded(
@@ -1006,7 +1010,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                 subtitle: 'Total Assets: ${visibleAssets.length}',
               ),
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 12),
             Expanded(
               child: _MetricTile(
                 icon: Icons.payments_outlined,
@@ -1016,7 +1020,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                 subtitle: 'AED',
               ),
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 12),
             Expanded(
               child: _MetricTile(
                 icon: Icons.delete_outline,
@@ -1026,7 +1030,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                 subtitle: 'Archived in place',
               ),
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 12),
             Expanded(
               child: _MetricTile(
                 icon: Icons.build,
@@ -1038,16 +1042,16 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
             ),
           ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 14),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(flex: 6, child: _categoryPanel()),
-            const SizedBox(width: 24),
-            Expanded(flex: 5, child: _alertPanel()),
+            Expanded(child: _categoryPanel()),
+            const SizedBox(width: 14),
+            Expanded(child: _alertPanel()),
           ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 14),
         _assetsPanel(limit: 8),
       ],
     );
@@ -1070,26 +1074,38 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
               children: counts.entries.map((entry) {
                 final percent = entry.value / visibleAssets.length;
                 return Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.only(bottom: 11),
                   child: Row(
                     children: [
                       SizedBox(
-                        width: 155,
-                        child: Text(entry.key, overflow: TextOverflow.ellipsis),
+                        width: 140,
+                        child: Text(
+                          entry.key,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12.5),
+                        ),
                       ),
                       Expanded(
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(2),
                           child: LinearProgressIndicator(
-                            minHeight: 16,
+                            minHeight: 12,
+                            borderRadius: BorderRadius.circular(99),
                             value: percent,
                             color: AppColors.primaryColor,
                             backgroundColor: AppColors.backgroundWidget,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Text(entry.value.toString()),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 24,
+                        child: Text(
+                          entry.value.toString(),
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -1341,21 +1357,35 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
 
     return _Panel(
       title: 'Alert',
-      trailing: Wrap(
-        spacing: 5,
-        runSpacing: 5,
-        children: const [
-          _AlertChip(label: 'Assets Due', color: Color(0xff4f83ff)),
-          _AlertChip(label: 'Maintenance', color: Color(0xff8e54c9)),
-          _AlertChip(label: 'Warranty', color: Color(0xffff6868)),
-          _AlertChip(label: 'Lease', color: Color(0xffffb23f)),
-        ],
+      trailing: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerRight,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            _AlertChip(label: 'Assets Due', color: Color(0xff4f83ff)),
+            SizedBox(width: 5),
+            _AlertChip(label: 'Maintenance', color: Color(0xff8e54c9)),
+            SizedBox(width: 5),
+            _AlertChip(label: 'Warranty', color: Color(0xffff6868)),
+            SizedBox(width: 5),
+            _AlertChip(label: 'Lease', color: Color(0xffffb23f)),
+          ],
+        ),
       ),
       child: Column(
         children: [
           Row(
             children: [
               OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(42, 34),
+                  padding: EdgeInsets.zero,
+                  side: const BorderSide(color: AppColors.border),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
                 onPressed: () {
                   setState(() {
                     alertMonth = DateTime(
@@ -1364,10 +1394,18 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                     );
                   });
                 },
-                child: const Icon(Icons.chevron_left),
+                child: const Icon(Icons.chevron_left, size: 19),
               ),
               const SizedBox(width: 8),
               OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(42, 34),
+                  padding: EdgeInsets.zero,
+                  side: const BorderSide(color: AppColors.border),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
                 onPressed: () {
                   setState(() {
                     alertMonth = DateTime(
@@ -1376,7 +1414,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                     );
                   });
                 },
-                child: const Icon(Icons.chevron_right),
+                child: const Icon(Icons.chevron_right, size: 19),
               ),
               Expanded(
                 child: Center(
@@ -1384,28 +1422,29 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                     monthLabel,
                     style: const TextStyle(
                       fontSize: 17,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.text,
                     ),
                   ),
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 9,
+                  horizontal: 11,
+                  vertical: 7,
                 ),
                 decoration: BoxDecoration(
                   color: const Color(0xffffbd0a),
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text(
                   'month',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Row(
             children: const [
               _CalendarDayHeader('Sun'),
@@ -1418,7 +1457,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
             ],
           ),
           SizedBox(
-            height: 420,
+            height: 352,
             child: GridView.builder(
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -1437,9 +1476,9 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                 final records = recordsByDate[_dateKey(date)] ?? const [];
 
                 return Container(
-                  padding: const EdgeInsets.all(7),
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: isToday ? const Color(0xfffff6d8) : Colors.white,
+                    color: isToday ? const Color(0xfffff7de) : Colors.white,
                     border: Border.all(color: AppColors.border),
                   ),
                   child: Column(
@@ -1448,12 +1487,14 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                       Text(
                         date.day.toString(),
                         style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                           color: isCurrentMonth
                               ? const Color(0xff0051c8)
                               : const Color(0xffaac8ef),
                         ),
                       ),
-                      const SizedBox(height: 7),
+                      const SizedBox(height: 5),
                       ...records.take(2).map((record) {
                         final itemCode = record['asset_name']?.toString() ?? '';
                         return Align(
@@ -1464,12 +1505,12 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                               width: double.infinity,
                               margin: const EdgeInsets.only(bottom: 4),
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 5,
+                                horizontal: 6,
                                 vertical: 3,
                               ),
                               decoration: BoxDecoration(
                                 color: const Color(0xff9b55c7),
-                                borderRadius: BorderRadius.circular(2),
+                                borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 itemCode.isEmpty ? 'Maintenance' : itemCode,
@@ -1478,7 +1519,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 11,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
@@ -1515,7 +1556,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     return _Panel(
       title: limit == null ? 'List of Assets' : 'Recent Assets',
       trailing: SizedBox(
-        width: 300,
+        width: 280,
         child: TextField(
           controller: searchController,
           onChanged: (value) {
@@ -1525,11 +1566,22 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
           },
           decoration: InputDecoration(
             hintText: 'Search Assets',
-            prefixIcon: const Icon(Icons.search),
+            prefixIcon: const Icon(Icons.search, size: 20),
             filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+            fillColor: const Color(0xfff8fafc),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
           ),
         ),
       ),
@@ -1560,7 +1612,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     return _Panel(
       title: 'Inventory',
       trailing: SizedBox(
-        width: 300,
+        width: 280,
         child: TextField(
           controller: searchController,
           onChanged: (value) {
@@ -1570,11 +1622,22 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
           },
           decoration: InputDecoration(
             hintText: 'Search Inventory',
-            prefixIcon: const Icon(Icons.search),
+            prefixIcon: const Icon(Icons.search, size: 20),
             filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+            fillColor: const Color(0xfff8fafc),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
           ),
         ),
       ),
@@ -2541,21 +2604,25 @@ class _TopBar extends StatelessWidget {
     final branchItems = ['__all__', ...branches];
 
     return Container(
-      height: 82,
-      padding: const EdgeInsets.symmetric(horizontal: 28),
+      height: 68,
+      padding: const EdgeInsets.symmetric(horizontal: 22),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
-          Image.asset('assets/images/icon.png', height: 50, width: 58),
-          const SizedBox(width: 14),
+          Image.asset('assets/images/icon.png', height: 42, width: 50),
+          const SizedBox(width: 12),
           const Text(
             'Asset Stock Taking',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: AppColors.text,
+            ),
           ),
-          const SizedBox(width: 32),
+          const SizedBox(width: 26),
           _TopNavIcon(
             icon: Icons.inventory_2_outlined,
             label: 'Assets',
@@ -2578,7 +2645,7 @@ class _TopBar extends StatelessWidget {
           ),
           const Spacer(),
           SizedBox(
-            width: 230,
+            width: 210,
             child: DropdownButtonFormField<String>(
               initialValue: branchValue,
               isExpanded: true,
@@ -2601,7 +2668,11 @@ class _TopBar extends StatelessWidget {
               },
             ),
           ),
-          IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh)),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: onRefresh,
+            icon: const Icon(Icons.refresh, size: 22),
+          ),
         ],
       ),
     );
@@ -2622,7 +2693,7 @@ class _Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 290,
+      width: 260,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(right: BorderSide(color: AppColors.border)),
@@ -2632,13 +2703,14 @@ class _Sidebar extends StatelessWidget {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(28, 28, 22, 24),
+            height: 88,
+            padding: const EdgeInsets.fromLTRB(22, 26, 18, 20),
             color: AppColors.primaryColor,
             child: const Text(
               'Al Ain Pharmacy',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 25,
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -2752,21 +2824,30 @@ class _SidebarItem extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        height: 52,
+        height: 48,
         color: selected ? const Color(0xffffbd0a) : Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 28),
+        padding: const EdgeInsets.symmetric(horizontal: 22),
         child: Row(
           children: [
             Icon(
               icon,
-              size: 22,
+              size: 20,
               color: selected ? Colors.deepOrange : Colors.deepOrange,
             ),
-            const SizedBox(width: 16),
-            Expanded(child: Text(label, style: const TextStyle(fontSize: 16))),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: AppColors.text,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
             if (badge != null)
               CircleAvatar(
-                radius: 14,
+                radius: 13,
                 backgroundColor: Colors.redAccent,
                 child: Text(
                   badge!,
@@ -2798,14 +2879,17 @@ class _SidebarSubItem extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        height: 43,
+        height: 38,
         color: selected ? const Color(0xfffff4ce) : Colors.white,
-        padding: const EdgeInsets.only(left: 56, right: 22),
+        padding: const EdgeInsets.only(left: 52, right: 18),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: Colors.deepOrange),
-            const SizedBox(width: 12),
-            Text(label, style: const TextStyle(fontSize: 14)),
+            Icon(icon, size: 18, color: Colors.deepOrange),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: AppColors.text),
+            ),
           ],
         ),
       ),
@@ -2833,11 +2917,11 @@ class _TopNavIcon extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(
           children: [
-            Icon(icon, size: 24, color: AppColors.secondaryColor),
+            Icon(icon, size: 21, color: AppColors.secondaryColor),
             const SizedBox(width: 6),
             Text(
               label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             ),
           ],
         ),
@@ -2864,71 +2948,83 @@ class _MetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 136,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            height: 112,
-            margin: const EdgeInsets.only(left: 22, top: 14),
-            padding: const EdgeInsets.fromLTRB(92, 22, 24, 18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(4),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+      height: 88,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.035),
+              blurRadius: 12,
+              offset: const Offset(0, 5),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 17),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      value,
-                      style: const TextStyle(fontSize: 30, height: 1.05),
-                    ),
-                    Text(subtitle, style: const TextStyle(fontSize: 14)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            top: 0,
-            left: 34,
-            child: Container(
-              width: 66,
-              height: 66,
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(7),
+                borderRadius: BorderRadius.circular(9),
                 boxShadow: [
                   BoxShadow(
-                    color: color.withValues(alpha: 0.25),
-                    blurRadius: 12,
-                    offset: const Offset(0, 8),
+                    color: color.withValues(alpha: 0.16),
+                    blurRadius: 10,
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
-              child: Icon(icon, color: Colors.white, size: 34),
+              child: Icon(icon, color: Colors.white, size: 26),
             ),
-          ),
-        ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  height: 1.12,
+                  color: AppColors.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    height: 1,
+                    color: AppColors.text,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.subText,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2947,36 +3043,66 @@ class _Panel extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.025),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (title.isNotEmpty || trailing != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 18),
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
               child: Row(
                 children: [
                   if (title.isNotEmpty)
-                    Expanded(
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
+                    if (trailing == null)
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.text,
+                          ),
+                        ),
+                      )
+                    else
+                      Flexible(
+                        fit: FlexFit.loose,
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.text,
+                          ),
                         ),
                       ),
+                  if (trailing != null) const SizedBox(width: 10),
+                  if (trailing != null)
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: trailing!,
+                      ),
                     ),
-                  if (trailing != null) const SizedBox(width: 12),
-                  if (trailing != null) Flexible(child: trailing!),
                 ],
               ),
             ),
           if (title.isNotEmpty || trailing != null)
             const Divider(height: 1, color: AppColors.border),
-          Padding(padding: const EdgeInsets.all(24), child: child),
+          Padding(padding: const EdgeInsets.all(18), child: child),
         ],
       ),
     );
@@ -2992,14 +3118,18 @@ class _AlertChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: BorderRadius.circular(5),
       ),
       child: Text(
         label,
-        style: const TextStyle(color: Colors.white, fontSize: 12),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -3015,12 +3145,19 @@ class _CalendarDayHeader extends StatelessWidget {
     return Expanded(
       child: Container(
         alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xfffff9e5),
+          color: const Color(0xfffffbec),
           border: Border.all(color: AppColors.border),
         ),
-        child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: AppColors.text,
+          ),
+        ),
       ),
     );
   }
@@ -3210,18 +3347,40 @@ class _AssetTableHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xfffff9e5),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      color: const Color(0xfffffbec),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       child: Row(
         children: [
-          const SizedBox(width: 58, child: Text('Photo')),
-          const Expanded(flex: 2, child: Text('Asset Tag ID')),
-          const Expanded(flex: 3, child: Text('Description')),
-          const Expanded(flex: 2, child: Text('Status')),
-          const Expanded(flex: 2, child: Text('Site')),
-          const Expanded(flex: 2, child: Text('Location')),
-          SizedBox(width: 150, child: Text(operationLabel ?? 'Actions')),
+          const SizedBox(width: 54, child: _TableHeaderText('Photo')),
+          const Expanded(flex: 2, child: _TableHeaderText('Asset Tag ID')),
+          const Expanded(flex: 3, child: _TableHeaderText('Description')),
+          const Expanded(flex: 2, child: _TableHeaderText('Status')),
+          const Expanded(flex: 2, child: _TableHeaderText('Site')),
+          const Expanded(flex: 2, child: _TableHeaderText('Location')),
+          SizedBox(
+            width: 138,
+            child: _TableHeaderText(operationLabel ?? 'Actions'),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _TableHeaderText extends StatelessWidget {
+  final String label;
+
+  const _TableHeaderText(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        color: AppColors.text,
       ),
     );
   }
@@ -3253,13 +3412,13 @@ class _AssetTableRow extends StatelessWidget {
     return InkWell(
       onTap: onDetails,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: AppColors.border)),
         ),
         child: Row(
           children: [
-            SizedBox(width: 58, child: _AssetImage(path: asset.imagePath)),
+            SizedBox(width: 54, child: _AssetImage(path: asset.imagePath)),
             Expanded(
               flex: 2,
               child: Row(
@@ -3280,7 +3439,11 @@ class _AssetTableRow extends StatelessWidget {
                     child: Text(
                       asset.itemCode,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Color(0xff005bd3)),
+                      style: const TextStyle(
+                        color: Color(0xff005bd3),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -3288,13 +3451,31 @@ class _AssetTableRow extends StatelessWidget {
             ),
             Expanded(
               flex: 3,
-              child: Text(asset.name, overflow: TextOverflow.ellipsis),
+              child: Text(
+                asset.name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13.5),
+              ),
             ),
             Expanded(flex: 2, child: _StatusPill(status: asset.status)),
-            Expanded(flex: 2, child: Text(asset.projectName)),
-            Expanded(flex: 2, child: Text(asset.location)),
+            Expanded(
+              flex: 2,
+              child: Text(
+                asset.projectName,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13.5),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                asset.location,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13.5),
+              ),
+            ),
             SizedBox(
-              width: 150,
+              width: 138,
               child: operationLabel == null
                   ? Wrap(
                       spacing: 4,
@@ -3348,11 +3529,11 @@ class _AssetImage extends StatelessWidget {
     final hasImage = path != null && path!.trim().isNotEmpty;
 
     return Container(
-      width: 40,
-      height: 40,
+      width: 38,
+      height: 38,
       decoration: BoxDecoration(
         color: AppColors.backgroundWidget,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(6),
       ),
       clipBehavior: Clip.antiAlias,
       child: hasImage
@@ -3389,7 +3570,11 @@ class _StatusPill extends StatelessWidget {
         ),
         child: Text(
           status.isEmpty ? 'Active' : status,
-          style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
         ),
       ),
     );

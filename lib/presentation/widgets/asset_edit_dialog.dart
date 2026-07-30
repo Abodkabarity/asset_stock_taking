@@ -100,7 +100,12 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
   Future<void> pickImage(ImageSource source) async {
     final picker = ImagePicker();
 
-    final image = await picker.pickImage(source: source, imageQuality: 70);
+    final image = await picker.pickImage(
+      source: source,
+      imageQuality: 70,
+      maxWidth: 1600,
+      maxHeight: 1600,
+    );
 
     if (image == null) return;
 
@@ -116,7 +121,12 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
   Future<void> pickWarrantyImage(ImageSource source) async {
     final picker = ImagePicker();
 
-    final image = await picker.pickImage(source: source, imageQuality: 70);
+    final image = await picker.pickImage(
+      source: source,
+      imageQuality: 70,
+      maxWidth: 1600,
+      maxHeight: 1600,
+    );
 
     if (image == null) return;
 
@@ -331,6 +341,7 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                                   File(selectedImagePath!),
                                   height: 120,
                                   width: 120,
+                                  cacheWidth: 480,
                                   fit: BoxFit.cover,
                                 ),
                         ),
@@ -657,6 +668,7 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                             File(selectedWarrantyImagePath!),
                             height: 120,
                             width: 120,
+                            cacheWidth: 480,
                             fit: BoxFit.cover,
                           ),
                   ),

@@ -30,7 +30,7 @@ class WebAssetShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xffedf1f6),
+      backgroundColor: const Color(0xfff4f7fb),
       body: Row(
         children: [
           _ShellSidebar(
@@ -60,21 +60,25 @@ class _ShellTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 82,
-      padding: const EdgeInsets.symmetric(horizontal: 28),
+      height: 68,
+      padding: const EdgeInsets.symmetric(horizontal: 22),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
-          Image.asset('assets/images/icon.png', height: 50, width: 58),
-          const SizedBox(width: 14),
+          Image.asset('assets/images/icon.png', height: 42, width: 50),
+          const SizedBox(width: 12),
           Text(
             title,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: AppColors.text,
+            ),
           ),
-          const SizedBox(width: 32),
+          const SizedBox(width: 26),
           _TopLink(
             icon: Icons.inventory_2_outlined,
             label: 'Assets',
@@ -98,7 +102,7 @@ class _ShellTopBar extends StatelessWidget {
           const Spacer(),
           IconButton(
             onPressed: () => _goHome(context, WebAssetSection.dashboard),
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, size: 22),
           ),
         ],
       ),
@@ -122,12 +126,15 @@ class _TopLink extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(
           children: [
-            Icon(icon, size: 19, color: AppColors.headerText),
-            const SizedBox(width: 7),
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+            Icon(icon, size: 21, color: AppColors.headerText),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
           ],
         ),
       ),
@@ -147,7 +154,7 @@ class _ShellSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 290,
+      width: 260,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(right: BorderSide(color: AppColors.border)),
@@ -157,13 +164,14 @@ class _ShellSidebar extends StatelessWidget {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(28, 28, 22, 24),
+            height: 88,
+            padding: const EdgeInsets.fromLTRB(22, 26, 18, 20),
             color: AppColors.primaryColor,
             child: const Text(
               'Al Ain Pharmacy',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 25,
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -239,14 +247,12 @@ class _SidebarItem extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final String? badge;
 
   const _SidebarItem({
     required this.icon,
     required this.label,
     required this.selected,
     required this.onTap,
-    this.badge,
   });
 
   @override
@@ -254,23 +260,23 @@ class _SidebarItem extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        height: 52,
+        height: 48,
         color: selected ? const Color(0xffffbd0a) : Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 28),
+        padding: const EdgeInsets.symmetric(horizontal: 22),
         child: Row(
           children: [
-            Icon(icon, size: 22, color: Colors.deepOrange),
-            const SizedBox(width: 16),
-            Expanded(child: Text(label, style: const TextStyle(fontSize: 16))),
-            if (badge != null)
-              CircleAvatar(
-                radius: 12,
-                backgroundColor: Colors.redAccent,
-                child: Text(
-                  badge!,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+            Icon(icon, size: 20, color: Colors.deepOrange),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: AppColors.text,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -296,14 +302,19 @@ class _SidebarSubItem extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        height: 43,
-        color: selected ? const Color(0xffefefef) : Colors.white,
-        padding: const EdgeInsets.only(left: 56, right: 22),
+        height: 38,
+        color: selected ? const Color(0xfffff4ce) : Colors.white,
+        padding: const EdgeInsets.only(left: 52, right: 18),
         child: Row(
           children: [
             Icon(icon, size: 18, color: Colors.deepOrange),
-            const SizedBox(width: 12),
-            Expanded(child: Text(label)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontSize: 13, color: AppColors.text),
+              ),
+            ),
           ],
         ),
       ),

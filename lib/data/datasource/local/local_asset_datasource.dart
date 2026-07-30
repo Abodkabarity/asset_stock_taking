@@ -134,18 +134,6 @@ class LocalAssetDatasource {
       return b.itemCode.compareTo(a.itemCode);
     });
 
-    print('======================');
-    print('FINAL SORT');
-    print('======================');
-
-    for (final e in items) {
-      print(
-        '${e.itemCode} | '
-        '${e.createdAt} | '
-        'SYNCED: ${e.isSynced}',
-      );
-    }
-
     return items;
   }
 
@@ -220,47 +208,66 @@ class LocalAssetDatasource {
   }
 
   /// =========================
-  /// SAVE SYNCED SERVER DATA
+  /// SAVE SYNCED SERVER DATA IN A SINGLE HIVE WRITE
   /// =========================
-  Future<void> saveSyncedAsset(AssetStockModel model) async {
+  Future<void> saveSyncedAssets(List<AssetStockModel> models) async {
+    if (models.isEmpty) {
+      return;
+    }
+
     final data = box.get('assets', defaultValue: []);
 
     final List<Map<String, dynamic>> current = (data as List)
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
-    /// IMPORTANT
-    /// REMOVE ANY OLD VERSION
-    current.removeWhere(
-      (e) =>
-          e['item_code'] == model.itemCode ||
-          (model.id != null && e['id'] == model.id),
-    );
+    for (final model in models) {
+      bool matches(Map<String, dynamic> item) {
+        return item['item_code'] == model.itemCode ||
+            (model.id != null && item['id'] == model.id);
+      }
 
-    /// ADD NEW SYNCED VERSION
-    current.add(model.copyWith(isSynced: true, isDeleted: false).toJson());
+      final hasPendingLocalChange = current.any(
+        (item) =>
+            matches(item) &&
+            (!(item['is_synced'] ?? false) || (item['is_deleted'] ?? false)),
+      );
+
+      if (hasPendingLocalChange) {
+        continue;
+      }
+
+      current.removeWhere(matches);
+      current.add(model.copyWith(isSynced: true, isDeleted: false).toJson());
+    }
 
     await box.put('assets', current);
+  }
 
-    print('======================');
-    print('SYNCED SAVED');
-    print('======================');
+  /// Applies a completed upload with one read and one write.
+  Future<void> applyUploadedAssets(List<AssetStockModel> models) async {
+    if (models.isEmpty) {
+      return;
+    }
 
-    final all = current
-        .where(
-          (e) =>
-              e['project_name'] == model.projectName &&
-              e['location'] == model.location,
-        )
+    final data = box.get('assets', defaultValue: []);
+    final current = (data as List)
+        .map((e) => Map<String, dynamic>.from(e))
         .toList();
 
-    for (final e in all) {
-      print(
-        '${e['item_code']} | '
-        '${e['created_at']} | '
-        'SYNCED: ${e['is_synced']}',
+    for (final model in models) {
+      current.removeWhere(
+        (item) =>
+            item['item_code'] == model.itemCode ||
+            (model.id != null && item['id'] == model.id),
       );
+
+      if (!model.isDeleted) {
+        current.add(model.copyWith(isSynced: true, isDeleted: false).toJson());
+      }
     }
+
+    await box.put('assets', current);
   }
 
   /// =========================

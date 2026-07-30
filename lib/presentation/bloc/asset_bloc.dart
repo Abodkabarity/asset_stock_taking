@@ -1,5 +1,5 @@
-import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../data/models/asset_item_model.dart';
 import '../../data/models/asset_stock_model.dart';
@@ -114,38 +114,57 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
   /// LOAD
   /// =========================================================
   Future<void> _load(LoadInitialData event, Emitter<AssetState> emit) async {
+    final isProjectLoad =
+        event.branch.trim().isNotEmpty && event.project.trim().isNotEmpty;
+
     emit(
       state.copyWith(
         syncingMaster: true,
-        masterMessage: 'Downloading Master...',
+        masterMessage: isProjectLoad
+            ? 'Refreshing Assets...'
+            : 'Downloading Master...',
       ),
     );
 
-    /// MASTER
-    final items = await repository.syncMaster();
+    if (!isProjectLoad) {
+      final masterFuture = repository.syncMaster();
+      final branchesFuture = repository.getBranches();
+      final items = await masterFuture;
+      final branches = await branchesFuture;
 
-    /// BRANCHES
-    final branches = await repository.getBranches();
+      emit(
+        state.copyWith(
+          items: items,
+          branches: branches,
+          syncingMaster: false,
+          masterDownloaded: true,
+          masterMessage: 'Download Successfully',
+        ),
+      );
+      return;
+    }
 
-    /// ONLINE
-    final online = await repository.getProjectAssets(
-      branch: event.branch,
-      project: event.project,
-    );
-
-    /// LOCAL
     final local = repository.getLocalAssets(
       branch: event.branch,
       project: event.project,
     );
 
-    /// MERGE
-    final merged = _mergeAssets(online: online, local: local);
+    // Make cached assets visible immediately instead of blocking the first
+    // frame on network and master-data refreshes.
+    emit(state.copyWith(localAssets: sortNewestFirst(local)));
+
+    final masterFuture = repository.getMasterItems();
+    final onlineFuture = repository.getProjectAssets(
+      branch: event.branch,
+      project: event.project,
+    );
+    final items = await masterFuture;
+    final online = await onlineFuture;
+    final merged = sortNewestFirst(online);
 
     emit(
       state.copyWith(
         items: items,
-        branches: branches,
         localAssets: merged,
         syncingMaster: false,
         masterDownloaded: true,
@@ -168,17 +187,6 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
       branch: event.branch,
       project: event.project,
     );
-    print('======================');
-    print('LOCAL ORDER');
-    print('======================');
-
-    for (final e in local) {
-      print(
-        '${e.itemCode} | '
-        '${e.createdAt} | '
-        'SYNCED: ${e.isSynced}',
-      );
-    }
     final merged = mergeAndSortAssets(base: state.localAssets, override: local);
 
     emit(state.copyWith(localAssets: merged, saving: false));
@@ -242,27 +250,17 @@ class AssetBloc extends Bloc<AssetEvent, AssetState> {
         current.copyWith(isDeleted: true, isSynced: false),
       );
 
-      /// RELOAD ONLINE
-      final online = await repository.getProjectAssets(
-        branch: event.branch,
-        project: event.project,
-      );
-
-      /// RELOAD LOCAL
       final local = repository.getLocalAssets(
         branch: event.branch,
         project: event.project,
       );
-
-      /// MERGE
-      final merged = _mergeAssets(online: online, local: local);
+      final merged = mergeAndSortAssets(
+        base: state.localAssets,
+        override: local,
+      );
 
       emit(state.copyWith(loading: false, localAssets: merged));
-    } catch (e, stack) {
-      print('DELETE ERROR');
-      print(e);
-      print(stack);
-
+    } catch (_) {
       emit(state.copyWith(loading: false));
     }
   }

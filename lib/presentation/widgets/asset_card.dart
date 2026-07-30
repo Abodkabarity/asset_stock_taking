@@ -12,9 +12,7 @@ import 'asset_edit_dialog.dart';
 class AssetCard extends StatelessWidget {
   final AssetStockModel item;
 
-  final VoidCallback onDelete;
-
-  const AssetCard({super.key, required this.item, required this.onDelete});
+  const AssetCard({super.key, required this.item});
   Color getClassificationColor(String classification) {
     switch (classification.trim().toLowerCase()) {
       case 'public':
@@ -57,8 +55,8 @@ class AssetCard extends StatelessWidget {
       },
 
       child: Container(
-        padding: const EdgeInsets.only(bottom: 20, top: 20, left: 5),
-        margin: EdgeInsets.all(4),
+        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.symmetric(vertical: 4),
 
         decoration: BoxDecoration(
           color: Colors.white,
@@ -69,97 +67,78 @@ class AssetCard extends StatelessWidget {
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.08),
 
-              blurRadius: 14,
+              blurRadius: 8,
 
-              offset: const Offset(0, 6),
+              offset: const Offset(0, 3),
             ),
           ],
         ),
 
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              Container(
-                margin: EdgeInsets.only(left: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Column(
+              children: [
+                if (item.imagePath != null || item.localImagePath != null)
+                  InkWell(
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (_) {
+                          return Dialog(
+                            backgroundColor: Colors.black,
 
-                child: Column(
-                  children: [
-                    if (item.imagePath != null || item.localImagePath != null)
-                      InkWell(
-                        onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (_) {
-                              return Dialog(
-                                backgroundColor: Colors.black,
-
-                                child: InteractiveViewer(
-                                  child:
-                                      (item.imagePath != null &&
-                                          item.imagePath!.startsWith('http'))
-                                      ? Image.network(
-                                          item.imagePath!,
-                                          fit: BoxFit.cover,
-                                        )
-                                      : Image.file(
-                                          File(
-                                            item.localImagePath ??
-                                                item.imagePath!,
-                                          ),
-                                          fit: BoxFit.contain,
-                                        ),
-                                ),
-                              );
-                            },
+                            child: InteractiveViewer(
+                              child:
+                                  (item.imagePath != null &&
+                                      item.imagePath!.startsWith('http'))
+                                  ? Image.network(
+                                      item.imagePath!,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Image.file(
+                                      File(
+                                        item.localImagePath ?? item.imagePath!,
+                                      ),
+                                      fit: BoxFit.contain,
+                                    ),
+                            ),
                           );
                         },
+                      );
+                    },
 
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryColor.withValues(
-                              alpha: 0.1,
-                            ),
-
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-
-                          child: const Icon(
-                            Icons.image,
-                            color: AppColors.primaryColor,
-                          ),
-                        ),
-                      ),
-                    SizedBox(height: 8),
-                    Container(
-                      width: 16,
-                      height: 16,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: getClassificationColor(item.classification),
+                        color: AppColors.primaryColor.withValues(alpha: 0.1),
 
-                        shape: BoxShape.circle,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
 
-                        boxShadow: [
-                          BoxShadow(
-                            color: getClassificationColor(
-                              item.classification,
-                            ).withValues(alpha: 0.5),
-
-                            blurRadius: 10,
-                            spreadRadius: 2,
-                          ),
-                        ],
-
-                        border: Border.all(color: Colors.white, width: 2),
+                      child: const Icon(
+                        Icons.image,
+                        color: AppColors.primaryColor,
                       ),
                     ),
-                  ],
+                  ),
+                SizedBox(height: 8),
+                Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: getClassificationColor(item.classification),
+
+                    shape: BoxShape.circle,
+
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
                 ),
-              ),
-              SizedBox(width: 10),
-              SizedBox(width: 15),
-              Column(
+              ],
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
 
                 children: [
@@ -217,28 +196,32 @@ class AssetCard extends StatelessWidget {
 
                   Row(
                     children: [
-                      Text.rich(
-                        TextSpan(
-                          children: [
-                            const TextSpan(text: 'Status: '),
-                            TextSpan(
-                              text: item.status,
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ],
+                      Expanded(
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              const TextSpan(text: 'Status: '),
+                              TextSpan(
+                                text: item.status,
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      SizedBox(width: 60),
-                      Text.rich(
-                        TextSpan(
-                          children: [
-                            const TextSpan(text: 'Cost: '),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              const TextSpan(text: 'Cost: '),
 
-                            TextSpan(
-                              text: item.cost.toString(),
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ],
+                              TextSpan(
+                                text: item.cost.toString(),
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -260,20 +243,15 @@ class AssetCard extends StatelessWidget {
                   ),
                   if (item.description.trim().isNotEmpty) ...[
                     const SizedBox(height: 6),
-                    SizedBox(
-                      width: MediaQuery.of(context).size.width * 0.72,
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            const TextSpan(text: 'Description: '),
-                            TextSpan(
-                              text: item.description,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          const TextSpan(text: 'Description: '),
+                          TextSpan(
+                            text: item.description,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -295,8 +273,8 @@ class AssetCard extends StatelessWidget {
                   ],
                 ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
