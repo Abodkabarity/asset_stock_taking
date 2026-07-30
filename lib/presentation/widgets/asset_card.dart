@@ -13,21 +13,6 @@ class AssetCard extends StatelessWidget {
   final AssetStockModel item;
 
   const AssetCard({super.key, required this.item});
-  Color getClassificationColor(String classification) {
-    switch (classification.trim().toLowerCase()) {
-      case 'public':
-        return Colors.green;
-
-      case 'restricted':
-        return Colors.lightBlue;
-
-      case 'confidential':
-        return Colors.amber;
-
-      default:
-        return Colors.grey;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -127,7 +112,9 @@ class AssetCard extends StatelessWidget {
                   width: 16,
                   height: 16,
                   decoration: BoxDecoration(
-                    color: getClassificationColor(item.classification),
+                    color: AssetClassificationUtils.classificationColor(
+                      item.classification,
+                    ),
 
                     shape: BoxShape.circle,
 

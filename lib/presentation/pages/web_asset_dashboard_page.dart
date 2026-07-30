@@ -211,7 +211,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     final assetsToPrint = classification == '__all__'
         ? printableAssets
         : printableAssets.where((asset) {
-            return asset.assetClassification.trim().toLowerCase() ==
+            return asset.classification.trim().toLowerCase() ==
                 classification.trim().toLowerCase();
           }).toList();
 
@@ -234,7 +234,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   ) async {
     final classifications =
         printableAssets
-            .map((asset) => asset.assetClassification.trim())
+            .map((asset) => asset.classification.trim())
             .where((value) => value.isNotEmpty)
             .toSet()
             .toList()
@@ -253,20 +253,34 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
               children: [
                 ListTile(
                   leading: const Icon(Icons.select_all),
-                  title: const Text('All printable classifications'),
+                  title: const Text('All Trackable Assets'),
                   subtitle: Text('${printableAssets.length} assets'),
                   onTap: () => Navigator.pop(context, '__all__'),
                 ),
                 const Divider(),
                 ...classifications.map((classification) {
                   final count = printableAssets.where((asset) {
-                    return asset.assetClassification.trim().toLowerCase() ==
+                    return asset.classification.trim().toLowerCase() ==
                         classification.toLowerCase();
                   }).length;
 
                   return ListTile(
-                    leading: const Icon(Icons.qr_code_2_outlined),
-                    title: Text(classification),
+                    leading: Icon(
+                      Icons.circle,
+                      size: 16,
+                      color: AssetClassificationUtils.classificationColor(
+                        classification,
+                      ),
+                    ),
+                    title: Text(
+                      classification,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AssetClassificationUtils.classificationColor(
+                          classification,
+                        ),
+                      ),
+                    ),
                     subtitle: Text('$count assets'),
                     onTap: () => Navigator.pop(context, classification),
                   );

@@ -189,13 +189,10 @@ class _SelectProjectPageState extends State<SelectProjectPage> {
               final classifications = await sl
                   .get<AssetRepository>()
                   .getClassifications(widget.branch);
-              final printableClassifications = classifications
-                  .where(AssetClassificationUtils.canPrintBarcode)
-                  .toList();
 
               if (!context.mounted) return;
 
-              if (printableClassifications.isEmpty) {
+              if (classifications.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('No Printable Assets Found')),
                 );
@@ -212,13 +209,13 @@ class _SelectProjectPageState extends State<SelectProjectPage> {
                 builder: (_) {
                   return AlertDialog(
                     backgroundColor: Colors.white,
-                    title: const Text('Select Asset Classification'),
+                    title: const Text('Select Classification'),
 
                     content: DropdownButtonFormField<String>(
                       initialValue: selectedClassification,
 
                       decoration: InputDecoration(
-                        labelText: 'Asset Classification',
+                        labelText: 'Classification',
 
                         filled: true,
                         fillColor: AppColors.backgroundWidget,
@@ -239,8 +236,24 @@ class _SelectProjectPageState extends State<SelectProjectPage> {
                         ),
                       ),
 
-                      items: printableClassifications.map((e) {
-                        return DropdownMenuItem(value: e, child: Text(e));
+                      items: classifications.map((classification) {
+                        final color =
+                            AssetClassificationUtils.classificationColor(
+                              classification,
+                            );
+                        return DropdownMenuItem(
+                          value: classification,
+                          child: Row(
+                            children: [
+                              Icon(Icons.circle, size: 14, color: color),
+                              const SizedBox(width: 10),
+                              Text(
+                                classification,
+                                style: TextStyle(color: color),
+                              ),
+                            ],
+                          ),
+                        );
                       }).toList(),
 
                       onChanged: (value) {

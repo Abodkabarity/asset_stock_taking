@@ -284,11 +284,12 @@ class AssetRemoteDatasource {
   Future<List<String>> getClassifications(String branch) async {
     final response = await supabase
         .from('asset_stock_taking')
-        .select('asset_classification')
-        .eq('location', branch);
+        .select('classification')
+        .eq('location', branch)
+        .eq('asset_classification', 'Trackable Asset');
 
     final list = response
-        .map<String>((e) => e['asset_classification'].toString())
+        .map<String>((e) => e['classification']?.toString() ?? '')
         .where((e) => e.trim().isNotEmpty)
         .toSet()
         .toList();
@@ -306,7 +307,8 @@ class AssetRemoteDatasource {
         .from('asset_stock_taking')
         .select()
         .eq('location', branch)
-        .eq('asset_classification', classification)
+        .eq('asset_classification', 'Trackable Asset')
+        .eq('classification', classification)
         .order('item_code');
 
     return response

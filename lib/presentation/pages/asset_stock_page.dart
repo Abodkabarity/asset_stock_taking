@@ -336,11 +336,18 @@ class _AssetStockPageState extends State<AssetStockPage> {
                   .toList();
 
               /// CLASSIFICATIONS
-              final classifications = onlineAssets
-                  .map((e) => e.assetClassification)
-                  .where(AssetClassificationUtils.canPrintBarcode)
-                  .toSet()
-                  .toList();
+              final classifications =
+                  onlineAssets
+                      .where(
+                        (asset) => AssetClassificationUtils.isTrackableAsset(
+                          asset.assetClassification,
+                        ),
+                      )
+                      .map((asset) => asset.classification.trim())
+                      .where((classification) => classification.isNotEmpty)
+                      .toSet()
+                      .toList()
+                    ..sort();
 
               if (classifications.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -360,13 +367,13 @@ class _AssetStockPageState extends State<AssetStockPage> {
                 builder: (_) {
                   return AlertDialog(
                     backgroundColor: Colors.white,
-                    title: const Text('Select Asset Classification'),
+                    title: const Text('Select Classification'),
 
                     content: DropdownButtonFormField<String>(
                       initialValue: selectedClassification,
 
                       decoration: InputDecoration(
-                        labelText: 'Asset Classification',
+                        labelText: 'Classification',
 
                         filled: true,
                         fillColor: AppColors.backgroundWidget,
@@ -387,10 +394,23 @@ class _AssetStockPageState extends State<AssetStockPage> {
                         ),
                       ),
 
-                      items: classifications.map((e) {
+                      items: classifications.map((classification) {
+                        final color =
+                            AssetClassificationUtils.classificationColor(
+                              classification,
+                            );
                         return DropdownMenuItem<String>(
-                          value: e,
-                          child: Text(e),
+                          value: classification,
+                          child: Row(
+                            children: [
+                              Icon(Icons.circle, size: 14, color: color),
+                              const SizedBox(width: 10),
+                              Text(
+                                classification,
+                                style: TextStyle(color: color),
+                              ),
+                            ],
+                          ),
                         );
                       }).toList(),
 
@@ -437,11 +457,11 @@ class _AssetStockPageState extends State<AssetStockPage> {
               /// FILTER ONLINE ONLY
               /// =========================
               final filtered = onlineAssets.where((e) {
-                return e.assetClassification.toLowerCase() ==
-                        result.toLowerCase() &&
-                    AssetClassificationUtils.canPrintBarcode(
+                return AssetClassificationUtils.isTrackableAsset(
                       e.assetClassification,
-                    );
+                    ) &&
+                    e.classification.trim().toLowerCase() ==
+                        result.trim().toLowerCase();
               }).toList();
 
               if (filtered.isEmpty) {
