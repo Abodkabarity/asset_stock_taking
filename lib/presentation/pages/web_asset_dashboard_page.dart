@@ -9,7 +9,9 @@ import '../../data/models/asset_stock_model.dart';
 import '../web/data/web_asset_repository.dart';
 import '../web/pages/web_asset_add_page.dart';
 import '../web/utils/web_asset_colors.dart';
+import '../web/utils/web_page_route.dart';
 import '../web/widgets/web_asset_quick_view_dialog.dart';
+import '../web/widgets/web_hover_surface.dart';
 
 enum WebAssetSection {
   dashboard,
@@ -34,8 +36,11 @@ class WebAssetDashboardPage extends StatefulWidget {
 }
 
 class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
+  static const int _assetsPerPage = 50;
+
   final webRepository = WebAssetRepository();
   final searchController = TextEditingController();
+  final contentScrollController = ScrollController();
   final maintenanceTitleController = TextEditingController();
   final maintenanceDetailsController = TextEditingController();
   final maintenanceDueDateController = TextEditingController();
@@ -53,11 +58,15 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   List<Map<String, dynamic>> maintenanceRecords = [];
   String? selectedBranch;
   String searchQuery = '';
+  String? selectedStatus;
   DateTime alertMonth = DateTime(DateTime.now().year, DateTime.now().month);
   AssetStockModel? selectedMaintenanceAsset;
   String maintenanceStatus = 'Open';
   bool maintenanceRepeating = false;
   bool loading = true;
+  bool sectionLoading = false;
+  WebAssetSection? pendingSection;
+  final Map<WebAssetSection, int> _sectionPages = {};
 
   @override
   void initState() {
@@ -69,6 +78,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   @override
   void dispose() {
     searchController.dispose();
+    contentScrollController.dispose();
     maintenanceTitleController.dispose();
     maintenanceDetailsController.dispose();
     maintenanceDueDateController.dispose();
@@ -86,13 +96,99 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       loading = true;
     });
 
-    branches = await webRepository.getBranches();
-    assets = await webRepository.getAssets();
-    maintenanceAlerts = await webRepository.getMaintenanceAlertsWithinDays();
-    maintenanceRecords = await webRepository.getMaintenanceRecords();
+    final branchesFuture = webRepository.getBranches();
+    final assetsFuture = webRepository.getAssets();
+    final alertsFuture = webRepository.getMaintenanceAlertsWithinDays();
+    final recordsFuture = webRepository.getMaintenanceRecords();
+
+    final loadedBranches = await branchesFuture;
+    final loadedAssets = await assetsFuture;
+
+    if (!mounted) return;
 
     setState(() {
+      branches = loadedBranches;
+      assets = loadedAssets;
+      _sectionPages.clear();
       loading = false;
+    });
+
+    final loadedAlerts = await alertsFuture;
+    final loadedRecords = await recordsFuture;
+
+    if (!mounted) return;
+    setState(() {
+      maintenanceAlerts = loadedAlerts;
+      maintenanceRecords = loadedRecords;
+    });
+  }
+
+  Future<void> _selectSection(WebAssetSection section) async {
+    if (section == selectedSection || sectionLoading) return;
+
+    setState(() {
+      sectionLoading = true;
+      pendingSection = section;
+      selectedStatus = null;
+      searchQuery = '';
+      searchController.clear();
+    });
+    await WidgetsBinding.instance.endOfFrame;
+
+    if (!mounted) return;
+    setState(() {
+      selectedSection = section;
+      _sectionPages[section] = 0;
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+
+    if (!mounted) return;
+    setState(() {
+      sectionLoading = false;
+      pendingSection = null;
+    });
+    _scrollContentToTop();
+  }
+
+  int _pageFor(WebAssetSection section) => _sectionPages[section] ?? 0;
+
+  void _resetPage(WebAssetSection section) {
+    _sectionPages[section] = 0;
+  }
+
+  void _changePage(WebAssetSection section, int page) {
+    if (page == _pageFor(section)) return;
+    setState(() {
+      _sectionPages[section] = page;
+    });
+    _scrollContentToTop();
+  }
+
+  _PagedItems<T> _paginate<T>(List<T> items, WebAssetSection section) {
+    final totalPages = items.isEmpty
+        ? 0
+        : (items.length + _assetsPerPage - 1) ~/ _assetsPerPage;
+    final page = totalPages == 0
+        ? 0
+        : _pageFor(section).clamp(0, totalPages - 1);
+    final start = page * _assetsPerPage;
+    final end = (start + _assetsPerPage).clamp(0, items.length);
+    return _PagedItems(
+      items: items.sublist(start, end),
+      currentPage: page,
+      totalPages: totalPages,
+      totalItems: items.length,
+    );
+  }
+
+  void _scrollContentToTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!contentScrollController.hasClients) return;
+      contentScrollController.animateTo(
+        contentScrollController.position.minScrollExtent,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      );
     });
   }
 
@@ -100,7 +196,9 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     final search = searchQuery.trim().toLowerCase();
 
     return assets.where((asset) {
-      return _matchesBranchAndSearch(asset, search) && _isRegularAsset(asset);
+      return _matchesBranchAndSearch(asset, search) &&
+          _matchesSelectedStatus(asset) &&
+          _isRegularAsset(asset);
     }).toList();
   }
 
@@ -108,7 +206,9 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     final search = searchQuery.trim().toLowerCase();
 
     return assets.where((asset) {
-      return _matchesBranchAndSearch(asset, search) && _isInventoryAsset(asset);
+      return _matchesBranchAndSearch(asset, search) &&
+          _matchesSelectedStatus(asset) &&
+          _isInventoryAsset(asset);
     }).toList();
   }
 
@@ -116,6 +216,11 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     final matchesBranch =
         selectedBranch == null || asset.location == selectedBranch;
     return matchesBranch && _matchesSearch(asset, search);
+  }
+
+  bool _matchesSelectedStatus(AssetStockModel asset) {
+    return selectedStatus == null ||
+        asset.status.trim().toLowerCase() == selectedStatus!.toLowerCase();
   }
 
   bool _matchesSearch(AssetStockModel asset, String search) {
@@ -126,6 +231,8 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
         asset.subCategory.toLowerCase().contains(search) ||
         asset.brand.toLowerCase().contains(search) ||
         asset.status.toLowerCase().contains(search) ||
+        asset.location.toLowerCase().contains(search) ||
+        asset.projectName.toLowerCase().contains(search) ||
         asset.assetInventory.toLowerCase().contains(search);
   }
 
@@ -171,9 +278,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   Future<void> _addAsset() async {
     final result = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(
-        builder: (_) => WebAssetAddPage(initialBranch: selectedBranch),
-      ),
+      webPageRoute(WebAssetAddPage(initialBranch: selectedBranch)),
     );
 
     if (result == true) {
@@ -181,13 +286,15 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     }
   }
 
-  Future<void> _exportAssets() async {
-    await AssetExcelService.exportAssets(
-      assets: visibleAssets,
-      fileName: selectedBranch == null
-          ? 'all_assets'
-          : '${selectedBranch}_assets',
-    );
+  Future<void> _exportList(List<AssetStockModel> items, String fileName) async {
+    if (items.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No assets available to export')),
+      );
+      return;
+    }
+    await AssetExcelService.exportAssets(assets: items, fileName: fileName);
   }
 
   Future<void> _printAssets() async {
@@ -491,139 +598,35 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     disposeNotesController.clear();
   }
 
-  Future<void> _openDisposeAssetPicker() async {
-    final picked = await showDialog<AssetStockModel>(
+  Future<List<AssetStockModel>?> _showAssetSearchPicker({
+    required String actionLabel,
+  }) {
+    return showDialog<List<AssetStockModel>>(
       context: context,
-      builder: (context) {
-        var dialogBranch = selectedBranch;
-        var dialogSearch = '';
-
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final filtered = assets.where((asset) {
-              final search = dialogSearch.trim().toLowerCase();
-              return _matchesSearch(asset, search) &&
-                  _isRegularAsset(asset) &&
-                  (dialogBranch == null || asset.location == dialogBranch);
-            }).toList();
-
-            return AlertDialog(
-              backgroundColor: Colors.white,
-              titlePadding: const EdgeInsets.fromLTRB(24, 20, 16, 8),
-              contentPadding: const EdgeInsets.fromLTRB(24, 10, 24, 18),
-              actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-              title: Row(
-                children: [
-                  const Expanded(child: Text('Select Assets')),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              content: SizedBox(
-                width: 900,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            onChanged: (value) {
-                              setDialogState(() {
-                                dialogSearch = value;
-                              });
-                            },
-                            decoration: const InputDecoration(
-                              hintText: 'Search...',
-                              prefixIcon: Icon(Icons.search),
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: dialogBranch,
-                            decoration: const InputDecoration(
-                              labelText: 'Branch',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: [
-                              const DropdownMenuItem<String>(
-                                value: null,
-                                child: Text('All Branches'),
-                              ),
-                              ...branches.map(
-                                (branch) => DropdownMenuItem<String>(
-                                  value: branch,
-                                  child: Text(branch),
-                                ),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              setDialogState(() {
-                                dialogBranch = value;
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _AssetTableHeader(operationLabel: 'Dispose'),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 360),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          children: filtered.isEmpty
-                              ? const [
-                                  SizedBox(
-                                    height: 140,
-                                    child: Center(
-                                      child: Text('No available assets'),
-                                    ),
-                                  ),
-                                ]
-                              : filtered.take(10).map((asset) {
-                                  return _AssetTableRow(
-                                    asset: asset,
-                                    operationLabel: 'Select',
-                                    operationIcon: Icons.add_circle_outline,
-                                    onOperation: () =>
-                                        Navigator.pop(context, asset),
-                                    onDetails: () {},
-                                    onTransfer: () {},
-                                    onDispose: () {},
-                                    onMaintenance: () {},
-                                  );
-                                }).toList(),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      barrierDismissible: false,
+      builder: (context) => _MultiAssetSearchDialog(
+        assets: assets.where(_isRegularAsset).toList(growable: false),
+        branches: branches,
+        initialBranch: selectedBranch,
+        actionLabel: actionLabel,
+      ),
     );
-
-    if (picked == null) return;
-    await _openDisposeDetailsDialog(picked);
   }
 
-  Future<void> _openDisposeDetailsDialog(AssetStockModel asset) async {
+  Future<void> _openDisposeAssetPicker() async {
+    final picked = await _showAssetSearchPicker(
+      actionLabel: 'Continue to Dispose',
+    );
+
+    if (picked == null || picked.isEmpty) return;
+    for (final asset in picked) {
+      if (!mounted) return;
+      final completed = await _openDisposeDetailsDialog(asset);
+      if (!completed) break;
+    }
+  }
+
+  Future<bool> _openDisposeDetailsDialog(AssetStockModel asset) async {
     _resetDisposeForm();
     disposeDateController.text = _formatPickerDate(DateTime.now());
 
@@ -807,6 +810,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     if (saved != true) {
       _resetDisposeForm();
     }
+    return saved == true;
   }
 
   void _resetMaintenanceForm() {
@@ -903,7 +907,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xfff4f7fb),
+      backgroundColor: AppColors.bg,
       body: LayoutBuilder(
         builder: (context, constraints) {
           return Row(
@@ -911,53 +915,58 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
               _Sidebar(
                 section: selectedSection,
                 alertCount: alertCount,
-                onSelected: (section) {
-                  setState(() {
-                    selectedSection = section;
-                  });
-                },
+                onSelected: _selectSection,
               ),
               Expanded(
                 child: Column(
                   children: [
                     _TopBar(
+                      section: selectedSection,
                       selectedBranch: selectedBranch,
                       branches: branches,
                       onBranchChanged: (value) {
                         setState(() {
                           selectedBranch = value;
+                          _sectionPages.clear();
                         });
                       },
-                      onAssets: () {
-                        setState(() {
-                          selectedSection = WebAssetSection.assets;
-                        });
-                      },
+                      onAssets: () => _selectSection(WebAssetSection.assets),
                       onAddAsset: _addAsset,
-                      onExport: _exportAssets,
                       onPrint: _printAssets,
                       onRefresh: _loadData,
                     ),
                     Expanded(
-                      child: loading
-                          ? const Center(child: CircularProgressIndicator())
-                          : SingleChildScrollView(
-                              padding: const EdgeInsets.fromLTRB(
-                                22,
-                                20,
-                                22,
-                                32,
-                              ),
-                              child: Align(
-                                alignment: Alignment.topLeft,
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 1540,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        switchInCurve: Curves.easeOut,
+                        switchOutCurve: Curves.easeIn,
+                        child: loading || sectionLoading
+                            ? _WebLoadingView(
+                                key: const ValueKey('web-loading'),
+                                message: loading
+                                    ? 'Loading asset data...'
+                                    : 'Opening ${_sectionLabel(pendingSection ?? selectedSection)}...',
+                              )
+                            : SingleChildScrollView(
+                                key: ValueKey(selectedSection),
+                                controller: contentScrollController,
+                                padding: const EdgeInsets.fromLTRB(
+                                  26,
+                                  24,
+                                  26,
+                                  34,
+                                ),
+                                child: Align(
+                                  alignment: Alignment.topLeft,
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 1540,
+                                    ),
+                                    child: _content(),
                                   ),
-                                  child: _content(),
                                 ),
                               ),
-                            ),
+                      ),
                     ),
                   ],
                 ),
@@ -967,6 +976,25 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
         },
       ),
     );
+  }
+
+  String _sectionLabel(WebAssetSection section) {
+    switch (section) {
+      case WebAssetSection.dashboard:
+        return 'Dashboard';
+      case WebAssetSection.alerts:
+        return 'Alerts';
+      case WebAssetSection.assets:
+        return 'List of Assets';
+      case WebAssetSection.inventory:
+        return 'Inventory';
+      case WebAssetSection.transfer:
+        return 'Move Assets';
+      case WebAssetSection.dispose:
+        return 'Disposed Assets';
+      case WebAssetSection.maintenance:
+        return 'Maintenance';
+    }
   }
 
   Widget _content() {
@@ -999,20 +1027,6 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Dashboard',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: AppColors.text,
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'dashboard & statistics',
-          style: TextStyle(fontSize: 13, color: AppColors.subText),
-        ),
-        const SizedBox(height: 14),
         Row(
           children: [
             Expanded(
@@ -1191,7 +1205,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                   const TabBar(
                     labelColor: AppColors.headerText,
                     unselectedLabelColor: AppColors.headerText,
-                    indicatorColor: Color(0xffffbd0a),
+                    indicatorColor: AppColors.primaryColor,
                     indicatorWeight: 2,
                     tabs: [
                       Tab(text: 'Maintenance Details'),
@@ -1336,8 +1350,8 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                   _showAssetDetails(asset);
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xffffbd0a),
-                  foregroundColor: Colors.black,
+                  backgroundColor: AppColors.primaryColor,
+                  foregroundColor: Colors.white,
                 ),
                 child: const Text('More Details'),
               ),
@@ -1448,7 +1462,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                   vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xffffbd0a),
+                  color: AppColors.primaryColor,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Text(
@@ -1490,7 +1504,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                 final records = recordsByDate[_dateKey(date)] ?? const [];
 
                 return Container(
-                  padding: const EdgeInsets.all(6),
+                  padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     color: isToday ? const Color(0xfffff7de) : Colors.white,
                     border: Border.all(color: AppColors.border),
@@ -1508,8 +1522,8 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                               : const Color(0xffaac8ef),
                         ),
                       ),
-                      const SizedBox(height: 5),
-                      ...records.take(2).map((record) {
+                      const SizedBox(height: 2),
+                      ...records.take(1).map((record) {
                         final itemCode = record['asset_name']?.toString() ?? '';
                         return Align(
                           alignment: Alignment.centerLeft,
@@ -1517,10 +1531,10 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                             onTap: () => _showMaintenanceRecordDialog(record),
                             child: Container(
                               width: double.infinity,
-                              margin: const EdgeInsets.only(bottom: 4),
+                              margin: const EdgeInsets.only(bottom: 2),
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 6,
-                                vertical: 3,
+                                vertical: 2,
                               ),
                               decoration: BoxDecoration(
                                 color: const Color(0xff9b55c7),
@@ -1540,14 +1554,14 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                           ),
                         );
                       }),
-                      if (records.length > 2)
+                      if (records.length > 1)
                         Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            '+${records.length - 2} more',
+                            '+${records.length - 1} more',
                             style: const TextStyle(
                               color: AppColors.subText,
-                              fontSize: 11,
+                              fontSize: 9.5,
                             ),
                           ),
                         ),
@@ -1563,40 +1577,35 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   Widget _assetsPanel({int? limit}) {
+    final filteredAssets = visibleAssets;
+    final pagedAssets = _paginate(filteredAssets, WebAssetSection.assets);
     final shownAssets = limit == null
-        ? visibleAssets
-        : visibleAssets.take(limit).toList();
+        ? pagedAssets.items
+        : filteredAssets.take(limit).toList();
 
     return _Panel(
       title: limit == null ? 'List of Assets' : 'Recent Assets',
-      trailing: SizedBox(
-        width: 280,
-        child: TextField(
-          controller: searchController,
-          onChanged: (value) {
-            setState(() {
-              searchQuery = value;
-            });
-          },
-          decoration: InputDecoration(
-            hintText: 'Search Assets',
-            prefixIcon: const Icon(Icons.search, size: 20),
-            filled: true,
-            fillColor: const Color(0xfff8fafc),
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-          ),
+      trailing: _ListToolbar(
+        searchController: searchController,
+        searchHint: 'Search Assets',
+        selectedStatus: selectedStatus,
+        statuses: _statusesFor(assets.where(_isRegularAsset)),
+        showStatusAndExport: limit == null,
+        onSearchChanged: (value) {
+          setState(() {
+            searchQuery = value;
+            _resetPage(WebAssetSection.assets);
+          });
+        },
+        onStatusChanged: (value) {
+          setState(() {
+            selectedStatus = value;
+            _resetPage(WebAssetSection.assets);
+          });
+        },
+        onExport: () => _exportList(
+          filteredAssets,
+          selectedBranch == null ? 'assets' : '${selectedBranch}_assets',
         ),
       ),
       child: Column(
@@ -1617,54 +1626,62 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                 onMaintenance: () => _openMaintenanceDetailsDialog(asset),
               );
             }),
+          if (limit == null && filteredAssets.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _PaginationBar(
+              currentPage: pagedAssets.currentPage,
+              totalPages: pagedAssets.totalPages,
+              totalItems: filteredAssets.length,
+              pageSize: _assetsPerPage,
+              onPageChanged: (page) =>
+                  _changePage(WebAssetSection.assets, page),
+            ),
+          ],
         ],
       ),
     );
   }
 
   Widget _inventoryPanel() {
+    final inventoryAssets = visibleInventoryAssets;
+    final pagedAssets = _paginate(inventoryAssets, WebAssetSection.inventory);
+
     return _Panel(
       title: 'Inventory',
-      trailing: SizedBox(
-        width: 280,
-        child: TextField(
-          controller: searchController,
-          onChanged: (value) {
-            setState(() {
-              searchQuery = value;
-            });
-          },
-          decoration: InputDecoration(
-            hintText: 'Search Inventory',
-            prefixIcon: const Icon(Icons.search, size: 20),
-            filled: true,
-            fillColor: const Color(0xfff8fafc),
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-          ),
+      trailing: _ListToolbar(
+        searchController: searchController,
+        searchHint: 'Search Inventory',
+        selectedStatus: selectedStatus,
+        statuses: _statusesFor(assets.where(_isInventoryAsset)),
+        onSearchChanged: (value) {
+          setState(() {
+            searchQuery = value;
+            _resetPage(WebAssetSection.inventory);
+          });
+        },
+        onStatusChanged: (value) {
+          setState(() {
+            selectedStatus = value;
+            _resetPage(WebAssetSection.inventory);
+          });
+        },
+        onExport: () => _exportList(
+          inventoryAssets,
+          selectedBranch == null
+              ? 'inventory_assets'
+              : '${selectedBranch}_inventory_assets',
         ),
       ),
       child: Column(
         children: [
           _AssetTableHeader(),
-          if (visibleInventoryAssets.isEmpty)
+          if (inventoryAssets.isEmpty)
             const SizedBox(
               height: 180,
               child: Center(child: Text('No inventory items found')),
             )
           else
-            ...visibleInventoryAssets.map((asset) {
+            ...pagedAssets.items.map((asset) {
               return _AssetTableRow(
                 asset: asset,
                 onDetails: () => _showAssetDetails(asset),
@@ -1673,176 +1690,36 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                 onMaintenance: () => _openMaintenanceDetailsDialog(asset),
               );
             }),
+          if (inventoryAssets.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _PaginationBar(
+              currentPage: pagedAssets.currentPage,
+              totalPages: pagedAssets.totalPages,
+              totalItems: pagedAssets.totalItems,
+              pageSize: _assetsPerPage,
+              onPageChanged: (page) =>
+                  _changePage(WebAssetSection.inventory, page),
+            ),
+          ],
         ],
       ),
     );
   }
 
   Future<void> _openMaintenanceAssetPicker() async {
-    final picked = await showDialog<AssetStockModel>(
-      context: context,
-      builder: (context) {
-        var dialogBranch = selectedBranch;
-        var dialogSearch = '';
-        AssetStockModel? selected;
-
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final filtered = assets.where((asset) {
-              final search = dialogSearch.trim().toLowerCase();
-              return _matchesSearch(asset, search) &&
-                  _isRegularAsset(asset) &&
-                  (dialogBranch == null || asset.location == dialogBranch);
-            }).toList();
-
-            return AlertDialog(
-              backgroundColor: Colors.white,
-              titlePadding: const EdgeInsets.fromLTRB(24, 20, 16, 8),
-              contentPadding: const EdgeInsets.fromLTRB(24, 10, 24, 18),
-              actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-              title: Row(
-                children: [
-                  const Expanded(child: Text('Select Assets')),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              content: SizedBox(
-                width: 900,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            onChanged: (value) {
-                              setDialogState(() {
-                                dialogSearch = value;
-                              });
-                            },
-                            decoration: const InputDecoration(
-                              hintText: 'Search...',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: dialogBranch,
-                            decoration: const InputDecoration(
-                              labelText: 'Branch',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: [
-                              const DropdownMenuItem<String>(
-                                value: null,
-                                child: Text('All Branches'),
-                              ),
-                              ...branches.map(
-                                (branch) => DropdownMenuItem<String>(
-                                  value: branch,
-                                  child: Text(branch),
-                                ),
-                              ),
-                            ],
-                            onChanged: (value) {
-                              setDialogState(() {
-                                dialogBranch = value;
-                                selected = null;
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Show 10 entries'),
-                    const SizedBox(height: 8),
-                    _AssetTableHeader(operationLabel: 'Select'),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 360),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          children: filtered.isEmpty
-                              ? const [
-                                  SizedBox(
-                                    height: 140,
-                                    child: Center(
-                                      child: Text('No available assets'),
-                                    ),
-                                  ),
-                                ]
-                              : filtered.take(10).map((asset) {
-                                  final isSelected =
-                                      selected?.itemCode == asset.itemCode;
-                                  return Container(
-                                    color: isSelected
-                                        ? const Color(0xfffff8de)
-                                        : null,
-                                    child: _AssetTableRow(
-                                      asset: asset,
-                                      operationLabel: isSelected
-                                          ? 'Selected'
-                                          : 'Select',
-                                      operationIcon: isSelected
-                                          ? Icons.check_circle
-                                          : Icons.add_circle_outline,
-                                      onOperation: () {
-                                        setDialogState(() {
-                                          selected = asset;
-                                        });
-                                        Navigator.pop(context, asset);
-                                      },
-                                      onDetails: () {},
-                                      onTransfer: () {},
-                                      onDispose: () {},
-                                      onMaintenance: () {},
-                                    ),
-                                  );
-                                }).toList(),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                ElevatedButton(
-                  onPressed: selected == null
-                      ? null
-                      : () => Navigator.pop(context, selected),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xffffbd0a),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
-                    ),
-                  ),
-                  child: const Text('Add to List'),
-                ),
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    final picked = await _showAssetSearchPicker(
+      actionLabel: 'Continue to Maintenance',
     );
 
-    if (picked == null) return;
-    await _openMaintenanceDetailsDialog(picked);
+    if (picked == null || picked.isEmpty) return;
+    for (final asset in picked) {
+      if (!mounted) return;
+      final completed = await _openMaintenanceDetailsDialog(asset);
+      if (!completed) break;
+    }
   }
 
-  Future<void> _openMaintenanceDetailsDialog(AssetStockModel asset) async {
+  Future<bool> _openMaintenanceDetailsDialog(AssetStockModel asset) async {
     maintenanceTitleController.text = asset.name;
     maintenanceDetailsController.clear();
     maintenanceDueDateController.clear();
@@ -1879,12 +1756,12 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                     width: 42,
                     height: 42,
                     decoration: BoxDecoration(
-                      color: Colors.deepOrange.withValues(alpha: 0.1),
+                      color: AppColors.primaryColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(
                       Icons.settings_suggest_outlined,
-                      color: Colors.deepOrange,
+                      color: AppColors.primaryColor,
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -2108,7 +1985,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                   icon: const Icon(Icons.add, color: Colors.black),
                   label: const Text('Add'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xffffbd0a),
+                    backgroundColor: AppColors.primaryColor,
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 22,
@@ -2126,79 +2003,177 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     if (saved != true) {
       _resetMaintenanceForm();
     }
+    return saved == true;
   }
 
   Widget _alertsPanel() {
+    final pagedAlerts = _paginate(maintenanceAlerts, WebAssetSection.alerts);
+    final alertAssets = <AssetStockModel>[];
+    for (final alert in maintenanceAlerts) {
+      final itemCode = alert['item_code']?.toString() ?? '';
+      final asset = _assetByItemCode(itemCode);
+      if (asset != null) alertAssets.add(asset);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Icon(Icons.flag_outlined, color: Colors.deepOrange),
-            const SizedBox(width: 12),
-            const Text(
-              'Alerts',
-              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w500),
+            Expanded(
+              child: _AlertSummaryCard(
+                icon: Icons.notifications_active_outlined,
+                color: const Color(0xFFE53935),
+                label: 'Active Alerts',
+                value: alertCount.toString(),
+                note: 'Requires attention',
+              ),
             ),
             const SizedBox(width: 12),
-            if (alertCount > 0)
-              CircleAvatar(
-                radius: 15,
-                backgroundColor: Colors.redAccent,
-                child: Text(
-                  alertCount.toString(),
-                  style: const TextStyle(color: Colors.white),
-                ),
+            Expanded(
+              child: _AlertSummaryCard(
+                icon: Icons.schedule_outlined,
+                color: const Color(0xFFF59E0B),
+                label: 'Due Soon',
+                value: maintenanceAlerts.length.toString(),
+                note: 'Within the next 3 days',
               ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _AlertSummaryCard(
+                icon: Icons.location_on_outlined,
+                color: AppColors.primaryColor,
+                label: 'Location Scope',
+                value: selectedBranch ?? 'All Branches',
+                note: 'Current branch filter',
+              ),
+            ),
           ],
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 14),
         _Panel(
-          title: 'Maintenance due in 3 days',
+          title: 'Maintenance Alerts',
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE53935).withValues(alpha: .1),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  '$alertCount alerts',
+                  style: const TextStyle(
+                    color: Color(0xFFE53935),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              OutlinedButton.icon(
+                onPressed: alertAssets.isEmpty
+                    ? null
+                    : () => _exportList(alertAssets, 'maintenance_alerts'),
+                icon: const Icon(Icons.file_download_outlined, size: 18),
+                label: const Text('Export'),
+              ),
+            ],
+          ),
           child: maintenanceAlerts.isEmpty
-              ? const SizedBox(
-                  height: 160,
-                  child: Center(child: Text('No maintenance alerts')),
-                )
+              ? const _AlertEmptyState()
               : Column(
-                  children: maintenanceAlerts.map((alert) {
-                    final itemCode = alert['item_code']?.toString() ?? '';
-                    AssetStockModel? asset;
-                    for (final candidate in assets) {
-                      if (candidate.itemCode == itemCode) {
-                        asset = candidate;
-                        break;
+                  children: [
+                    ...pagedAlerts.items.map((alert) {
+                      final itemCode = alert['item_code']?.toString() ?? '';
+                      AssetStockModel? asset;
+                      for (final candidate in assets) {
+                        if (candidate.itemCode == itemCode) {
+                          asset = candidate;
+                          break;
+                        }
                       }
-                    }
-                    final date =
-                        alert['completed_date']?.toString() ??
-                        alert['due_date']?.toString() ??
-                        '-';
+                      final date =
+                          alert['completed_date']?.toString() ??
+                          alert['due_date']?.toString() ??
+                          '-';
 
-                    final tappedAsset = asset;
+                      final tappedAsset = asset;
 
-                    return ListTile(
-                      leading: const Icon(
-                        Icons.settings_suggest_outlined,
-                        color: Colors.deepOrange,
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 9),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFBF2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(
+                              0xFFF59E0B,
+                            ).withValues(alpha: .22),
+                          ),
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
+                          ),
+                          leading: Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: const Color(
+                                0xFFF59E0B,
+                              ).withValues(alpha: .13),
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: const Icon(
+                              Icons.build_outlined,
+                              color: Color(0xFFF59E0B),
+                            ),
+                          ),
+                          title: Text(
+                            '${alert['asset_name'] ?? itemCode} · $itemCode',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 5),
+                            child: Text(
+                              'Due $date  •  ${alert['branch'] ?? '-'}',
+                            ),
+                          ),
+                          trailing: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _AlertChip(
+                                label: 'Due soon',
+                                color: Color(0xFFF59E0B),
+                              ),
+                              SizedBox(width: 10),
+                              Icon(Icons.chevron_right_rounded),
+                            ],
+                          ),
+                          onTap: tappedAsset == null
+                              ? null
+                              : () => _showAssetDetails(tappedAsset),
+                        ),
+                      );
+                    }),
+                    if (pagedAlerts.totalPages > 1) ...[
+                      const SizedBox(height: 8),
+                      _PaginationBar(
+                        currentPage: pagedAlerts.currentPage,
+                        totalPages: pagedAlerts.totalPages,
+                        totalItems: pagedAlerts.totalItems,
+                        pageSize: _assetsPerPage,
+                        onPageChanged: (page) =>
+                            _changePage(WebAssetSection.alerts, page),
                       ),
-                      title: Text(
-                        '${alert['asset_name'] ?? itemCode} - $itemCode',
-                      ),
-                      subtitle: Text(
-                        'Complete date: $date | ${alert['branch'] ?? '-'}',
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: tappedAsset == null
-                          ? null
-                          : () {
-                              setState(() {
-                                selectedSection = WebAssetSection.assets;
-                              });
-                              _showAssetDetails(tappedAsset);
-                            },
-                    );
-                  }).toList(),
+                    ],
+                  ],
                 ),
         ),
       ],
@@ -2211,19 +2186,34 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       return _matchesBranchAndSearch(asset, search) &&
           asset.status.trim().toLowerCase() == 'disposed';
     }).toList();
+    final pagedAssets = _paginate(disposedAssets, WebAssetSection.dispose);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Icon(Icons.change_circle_outlined, color: Colors.deepOrange),
+            const Icon(
+              Icons.change_circle_outlined,
+              color: AppColors.primaryColor,
+            ),
             const SizedBox(width: 12),
             const Text(
               'Dispose',
               style: TextStyle(fontSize: 30, fontWeight: FontWeight.w500),
             ),
             const Spacer(),
+            OutlinedButton.icon(
+              onPressed: () => _exportList(
+                disposedAssets,
+                selectedBranch == null
+                    ? 'disposed_assets'
+                    : '${selectedBranch}_disposed_assets',
+              ),
+              icon: const Icon(Icons.file_download_outlined, size: 18),
+              label: const Text('Export'),
+            ),
+            const SizedBox(width: 10),
             ElevatedButton.icon(
               onPressed: _openDisposeAssetPicker,
               icon: const Icon(Icons.add, color: Colors.white),
@@ -2258,6 +2248,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                       onChanged: (value) {
                         setState(() {
                           searchQuery = value;
+                          _resetPage(WebAssetSection.dispose);
                         });
                       },
                       decoration: InputDecoration(
@@ -2341,7 +2332,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                   child: Center(child: Text('No disposed assets found')),
                 )
               else
-                ...disposedAssets.map((asset) {
+                ...pagedAssets.items.map((asset) {
                   return _AssetTableRow(
                     asset: asset,
                     operationLabel: 'Edit',
@@ -2353,6 +2344,17 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                     onMaintenance: () => _openMaintenanceDetailsDialog(asset),
                   );
                 }),
+              if (disposedAssets.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                _PaginationBar(
+                  currentPage: pagedAssets.currentPage,
+                  totalPages: pagedAssets.totalPages,
+                  totalItems: pagedAssets.totalItems,
+                  pageSize: _assetsPerPage,
+                  onPageChanged: (page) =>
+                      _changePage(WebAssetSection.dispose, page),
+                ),
+              ],
             ],
           ),
         ),
@@ -2366,6 +2368,10 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       return _matchesBranchAndSearch(asset, search) &&
           asset.status.trim().toLowerCase() == 'maintenance';
     }).toList();
+    final pagedAssets = _paginate(
+      maintenanceAssets,
+      WebAssetSection.maintenance,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2374,7 +2380,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
           children: [
             const Icon(
               Icons.settings_suggest_outlined,
-              color: Colors.deepOrange,
+              color: AppColors.primaryColor,
             ),
             const SizedBox(width: 12),
             const Text(
@@ -2382,6 +2388,17 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
               style: TextStyle(fontSize: 30, fontWeight: FontWeight.w500),
             ),
             const Spacer(),
+            OutlinedButton.icon(
+              onPressed: () => _exportList(
+                maintenanceAssets,
+                selectedBranch == null
+                    ? 'maintenance_assets'
+                    : '${selectedBranch}_maintenance_assets',
+              ),
+              icon: const Icon(Icons.file_download_outlined, size: 18),
+              label: const Text('Export'),
+            ),
+            const SizedBox(width: 10),
             ElevatedButton.icon(
               onPressed: _openMaintenanceAssetPicker,
               icon: const Icon(Icons.add, color: Colors.white),
@@ -2416,6 +2433,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                       onChanged: (value) {
                         setState(() {
                           searchQuery = value;
+                          _resetPage(WebAssetSection.maintenance);
                         });
                       },
                       decoration: InputDecoration(
@@ -2499,7 +2517,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                   child: Center(child: Text('No assets pending maintenance')),
                 )
               else
-                ...maintenanceAssets.map((asset) {
+                ...pagedAssets.items.map((asset) {
                   return _AssetTableRow(
                     asset: asset,
                     operationLabel: 'Edit',
@@ -2511,6 +2529,17 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                     onMaintenance: () => _openMaintenanceDetailsDialog(asset),
                   );
                 }),
+              if (maintenanceAssets.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                _PaginationBar(
+                  currentPage: pagedAssets.currentPage,
+                  totalPages: pagedAssets.totalPages,
+                  totalItems: pagedAssets.totalItems,
+                  pageSize: _assetsPerPage,
+                  onPageChanged: (page) =>
+                      _changePage(WebAssetSection.maintenance, page),
+                ),
+              ],
             ],
           ),
         ),
@@ -2526,16 +2555,30 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     required IconData actionIcon,
     required Future<void> Function(AssetStockModel asset) onAction,
   }) {
+    final filteredAssets = visibleAssets;
+    final pagedAssets = _paginate(filteredAssets, WebAssetSection.transfer);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(icon, color: Colors.deepOrange),
+            Icon(icon, color: AppColors.primaryColor),
             const SizedBox(width: 12),
             Text(
               title,
               style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w500),
+            ),
+            const Spacer(),
+            OutlinedButton.icon(
+              onPressed: () => _exportList(
+                filteredAssets,
+                selectedBranch == null
+                    ? 'move_assets'
+                    : '${selectedBranch}_move_assets',
+              ),
+              icon: const Icon(Icons.file_download_outlined, size: 18),
+              label: const Text('Export'),
             ),
           ],
         ),
@@ -2571,43 +2614,70 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
               ),
               const SizedBox(height: 12),
               _AssetTableHeader(operationLabel: actionLabel),
-              ...visibleAssets.map((asset) {
-                return _AssetTableRow(
-                  asset: asset,
-                  operationLabel: actionLabel,
-                  operationIcon: actionIcon,
-                  onOperation: () => onAction(asset),
-                  onDetails: () => _showAssetDetails(asset),
-                  onTransfer: () => _transferAsset(asset),
-                  onDispose: () => _openDisposeDetailsDialog(asset),
-                  onMaintenance: () => _openMaintenanceDetailsDialog(asset),
-                );
-              }),
+              if (filteredAssets.isEmpty)
+                const SizedBox(
+                  height: 180,
+                  child: Center(child: Text('No assets found')),
+                )
+              else
+                ...pagedAssets.items.map((asset) {
+                  return _AssetTableRow(
+                    asset: asset,
+                    operationLabel: actionLabel,
+                    operationIcon: actionIcon,
+                    onOperation: () => onAction(asset),
+                    onDetails: () => _showAssetDetails(asset),
+                    onTransfer: () => _transferAsset(asset),
+                    onDispose: () => _openDisposeDetailsDialog(asset),
+                    onMaintenance: () => _openMaintenanceDetailsDialog(asset),
+                  );
+                }),
+              if (filteredAssets.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                _PaginationBar(
+                  currentPage: pagedAssets.currentPage,
+                  totalPages: pagedAssets.totalPages,
+                  totalItems: pagedAssets.totalItems,
+                  pageSize: _assetsPerPage,
+                  onPageChanged: (page) =>
+                      _changePage(WebAssetSection.transfer, page),
+                ),
+              ],
             ],
           ),
         ),
       ],
     );
   }
+
+  List<String> _statusesFor(Iterable<AssetStockModel> source) {
+    final values = source
+        .map((asset) => asset.status.trim())
+        .where((status) => status.isNotEmpty)
+        .toSet()
+        .toList();
+    values.sort();
+    return values;
+  }
 }
 
 class _TopBar extends StatelessWidget {
+  final WebAssetSection section;
   final String? selectedBranch;
   final List<String> branches;
   final ValueChanged<String?> onBranchChanged;
   final VoidCallback onAssets;
   final VoidCallback onAddAsset;
-  final VoidCallback onExport;
   final VoidCallback onPrint;
   final VoidCallback onRefresh;
 
   const _TopBar({
+    required this.section,
     required this.selectedBranch,
     required this.branches,
     required this.onBranchChanged,
     required this.onAssets,
     required this.onAddAsset,
-    required this.onExport,
     required this.onPrint,
     required this.onRefresh,
   });
@@ -2618,25 +2688,44 @@ class _TopBar extends StatelessWidget {
     final branchItems = ['__all__', ...branches];
 
     return Container(
-      height: 68,
-      padding: const EdgeInsets.symmetric(horizontal: 22),
+      height: 92,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: Color(0xF9FFFFFF),
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
         children: [
-          Image.asset('assets/images/icon.png', height: 42, width: 50),
-          const SizedBox(width: 12),
-          const Text(
-            'Asset Stock Taking',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: AppColors.text,
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.blueSoft,
+              borderRadius: BorderRadius.circular(12),
             ),
+            child: const Icon(Icons.menu_rounded, color: AppColors.headerText),
           ),
-          const SizedBox(width: 26),
+          const SizedBox(width: 18),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _title,
+                style: const TextStyle(
+                  fontSize: 23,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.text,
+                ),
+              ),
+              SizedBox(height: 3),
+              Text(
+                _subtitle,
+                style: const TextStyle(fontSize: 12, color: AppColors.subText),
+              ),
+            ],
+          ),
+          const SizedBox(width: 24),
           _TopNavIcon(
             icon: Icons.inventory_2_outlined,
             label: 'Assets',
@@ -2644,13 +2733,8 @@ class _TopBar extends StatelessWidget {
           ),
           _TopNavIcon(
             icon: Icons.add_circle_outline,
-            label: 'Asset',
+            label: 'Add Asset',
             onTap: onAddAsset,
-          ),
-          _TopNavIcon(
-            icon: Icons.file_download_outlined,
-            label: 'Export',
-            onTap: onExport,
           ),
           _TopNavIcon(
             icon: Icons.print_outlined,
@@ -2659,7 +2743,7 @@ class _TopBar extends StatelessWidget {
           ),
           const Spacer(),
           SizedBox(
-            width: 210,
+            width: 190,
             child: DropdownButtonFormField<String>(
               initialValue: branchValue,
               isExpanded: true,
@@ -2682,14 +2766,82 @@ class _TopBar extends StatelessWidget {
               },
             ),
           ),
+          const SizedBox(width: 8),
           IconButton(
             tooltip: 'Refresh',
             onPressed: onRefresh,
             icon: const Icon(Icons.refresh, size: 22),
           ),
+          const SizedBox(width: 8),
+          Container(width: 1, height: 34, color: AppColors.border),
+          const SizedBox(width: 14),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [AppColors.primaryColor, AppColors.cyan],
+              ),
+            ),
+            child: const Icon(Icons.person_outline, color: Colors.white),
+          ),
+          const SizedBox(width: 10),
+          const Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Al Ain Team',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              Text(
+                'Administrator',
+                style: TextStyle(fontSize: 11, color: AppColors.subText),
+              ),
+            ],
+          ),
         ],
       ),
     );
+  }
+
+  String get _title {
+    switch (section) {
+      case WebAssetSection.dashboard:
+        return 'Dashboard';
+      case WebAssetSection.alerts:
+        return 'Alerts';
+      case WebAssetSection.assets:
+        return 'List of Assets';
+      case WebAssetSection.inventory:
+        return 'Inventory';
+      case WebAssetSection.transfer:
+        return 'Move Assets';
+      case WebAssetSection.dispose:
+        return 'Disposed Assets';
+      case WebAssetSection.maintenance:
+        return 'Maintenance';
+    }
+  }
+
+  String get _subtitle {
+    switch (section) {
+      case WebAssetSection.dashboard:
+        return 'Overview & statistics';
+      case WebAssetSection.alerts:
+        return 'Time-sensitive asset notifications';
+      case WebAssetSection.assets:
+        return 'Browse, filter and manage assets';
+      case WebAssetSection.inventory:
+        return 'Inventory asset register';
+      case WebAssetSection.transfer:
+        return 'Move assets between locations';
+      case WebAssetSection.dispose:
+        return 'Disposed asset register';
+      case WebAssetSection.maintenance:
+        return 'Assets currently under maintenance';
+    }
   }
 }
 
@@ -2707,65 +2859,134 @@ class _Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 260,
+      width: 270,
       decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: AppColors.border)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF06172F), Color(0xFF082B55), Color(0xFF061B36)],
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            height: 88,
-            padding: const EdgeInsets.fromLTRB(22, 26, 18, 20),
-            color: AppColors.primaryColor,
-            child: const Text(
-              'Al Ain Pharmacy',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 25, 16, 25),
+            child: Row(
+              children: [
+                _DashboardBrandMark(),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Al Ain Pharmacy',
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(height: 3),
+                      Text(
+                        'ASSET',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          letterSpacing: 2.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Column(
+                children: [
+                  _SidebarItem(
+                    icon: Icons.grid_view_rounded,
+                    label: 'Dashboard',
+                    selected: section == WebAssetSection.dashboard,
+                    onTap: () => onSelected(WebAssetSection.dashboard),
+                  ),
+                  _SidebarItem(
+                    icon: Icons.notifications_none_rounded,
+                    label: 'Alerts',
+                    badge: alertCount > 0 ? alertCount.toString() : null,
+                    selected: section == WebAssetSection.alerts,
+                    onTap: () => onSelected(WebAssetSection.alerts),
+                  ),
+                  _SidebarGroup(selected: section, onSelected: onSelected),
+                  _SidebarItem(
+                    icon: Icons.inventory_2_outlined,
+                    label: 'Inventory',
+                    selected: section == WebAssetSection.inventory,
+                    onTap: () => onSelected(WebAssetSection.inventory),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(15, 15, 15, 7),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'MANAGEMENT',
+                        style: TextStyle(
+                          color: Colors.white38,
+                          fontSize: 10,
+                          letterSpacing: 1.4,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  _SidebarItem(
+                    icon: Icons.bar_chart_rounded,
+                    label: 'Reports',
+                    selected: false,
+                    onTap: () => onSelected(WebAssetSection.dashboard),
+                  ),
+                  _SidebarItem(
+                    icon: Icons.tune_rounded,
+                    label: 'Setup',
+                    selected: false,
+                    onTap: () => onSelected(WebAssetSection.dashboard),
+                  ),
+                  _SidebarItem(
+                    icon: Icons.help_outline_rounded,
+                    label: 'Help / Support',
+                    selected: false,
+                    onTap: () {},
+                  ),
+                ],
               ),
             ),
           ),
-          _SidebarItem(
-            icon: Icons.home_outlined,
-            label: 'Dashboard',
-            selected: section == WebAssetSection.dashboard,
-            onTap: () => onSelected(WebAssetSection.dashboard),
-          ),
-          _SidebarItem(
-            icon: Icons.notifications_none,
-            label: 'Alerts',
-            badge: alertCount > 0 ? alertCount.toString() : null,
-            selected: section == WebAssetSection.alerts,
-            onTap: () => onSelected(WebAssetSection.alerts),
-          ),
-          _SidebarGroup(selected: section, onSelected: onSelected),
-          _SidebarItem(
-            icon: Icons.inventory_2_outlined,
-            label: 'Inventory',
-            selected: section == WebAssetSection.inventory,
-            onTap: () => onSelected(WebAssetSection.inventory),
-          ),
-          /*  _SidebarItem(
-            icon: Icons.list_alt_outlined,
-            label: 'Lists',
-            selected: false,
-            onTap: () => onSelected(WebAssetSection.assets),
-          ),*/
-          _SidebarItem(
-            icon: Icons.description_outlined,
-            label: 'Reports',
-            selected: false,
-            onTap: () => onSelected(WebAssetSection.dashboard),
-          ),
-          _SidebarItem(
-            icon: Icons.settings_outlined,
-            label: 'Setup',
-            selected: false,
-            onTap: () => onSelected(WebAssetSection.dashboard),
+          Container(
+            margin: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: .06),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: .08)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.auto_graph_rounded, color: AppColors.cyan),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Smart asset control',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -2773,11 +2994,69 @@ class _Sidebar extends StatelessWidget {
   }
 }
 
-class _SidebarGroup extends StatelessWidget {
+class _DashboardBrandMark extends StatelessWidget {
+  const _DashboardBrandMark();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 50,
+    height: 50,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(15),
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [AppColors.cyan, AppColors.primaryColor],
+      ),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x5500C6F7),
+          blurRadius: 18,
+          offset: Offset(0, 7),
+        ),
+      ],
+    ),
+    child: const Icon(
+      Icons.medication_liquid_outlined,
+      color: Colors.white,
+      size: 28,
+    ),
+  );
+}
+
+class _SidebarGroup extends StatefulWidget {
   final WebAssetSection selected;
   final ValueChanged<WebAssetSection> onSelected;
 
   const _SidebarGroup({required this.selected, required this.onSelected});
+
+  @override
+  State<_SidebarGroup> createState() => _SidebarGroupState();
+}
+
+class _SidebarGroupState extends State<_SidebarGroup> {
+  late bool expanded;
+
+  bool _isAssetSection(WebAssetSection section) =>
+      section == WebAssetSection.assets ||
+      section == WebAssetSection.transfer ||
+      section == WebAssetSection.dispose ||
+      section == WebAssetSection.maintenance;
+
+  @override
+  void initState() {
+    super.initState();
+    expanded = _isAssetSection(widget.selected);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SidebarGroup oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_isAssetSection(widget.selected) &&
+        !_isAssetSection(oldWidget.selected)) {
+      expanded = true;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2786,44 +3065,71 @@ class _SidebarGroup extends StatelessWidget {
         _SidebarItem(
           icon: Icons.extension_outlined,
           label: 'Assets',
-          selected: selected == WebAssetSection.assets,
-          onTap: () => onSelected(WebAssetSection.assets),
+          selected: false,
+          onTap: () => setState(() => expanded = !expanded),
+          trailing: AnimatedRotation(
+            turns: expanded ? .25 : 0,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            child: const Icon(
+              Icons.chevron_right_rounded,
+              size: 19,
+              color: Colors.white70,
+            ),
+          ),
         ),
-        _SidebarSubItem(
-          icon: Icons.format_list_bulleted,
-          label: 'List of Assets',
-          selected: selected == WebAssetSection.assets,
-          onTap: () => onSelected(WebAssetSection.assets),
-        ),
-        _SidebarSubItem(
-          icon: Icons.open_with,
-          label: 'Move',
-          selected: selected == WebAssetSection.transfer,
-          onTap: () => onSelected(WebAssetSection.transfer),
-        ),
-        _SidebarSubItem(
-          icon: Icons.change_circle_outlined,
-          label: 'Dispose',
-          selected: selected == WebAssetSection.dispose,
-          onTap: () => onSelected(WebAssetSection.dispose),
-        ),
-        _SidebarSubItem(
-          icon: Icons.settings_suggest_outlined,
-          label: 'Maintenance',
-          selected: selected == WebAssetSection.maintenance,
-          onTap: () => onSelected(WebAssetSection.maintenance),
+        ClipRect(
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: expanded
+                ? Column(
+                    children: [
+                      _SidebarSubItem(
+                        icon: Icons.format_list_bulleted,
+                        label: 'List of Assets',
+                        selected: widget.selected == WebAssetSection.assets,
+                        onTap: () => widget.onSelected(WebAssetSection.assets),
+                      ),
+                      _SidebarSubItem(
+                        icon: Icons.open_with,
+                        label: 'Move',
+                        selected: widget.selected == WebAssetSection.transfer,
+                        onTap: () =>
+                            widget.onSelected(WebAssetSection.transfer),
+                      ),
+                      _SidebarSubItem(
+                        icon: Icons.change_circle_outlined,
+                        label: 'Dispose',
+                        selected: widget.selected == WebAssetSection.dispose,
+                        onTap: () => widget.onSelected(WebAssetSection.dispose),
+                      ),
+                      _SidebarSubItem(
+                        icon: Icons.settings_suggest_outlined,
+                        label: 'Maintenance',
+                        selected:
+                            widget.selected == WebAssetSection.maintenance,
+                        onTap: () =>
+                            widget.onSelected(WebAssetSection.maintenance),
+                      ),
+                    ],
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
         ),
       ],
     );
   }
 }
 
-class _SidebarItem extends StatelessWidget {
+class _SidebarItem extends StatefulWidget {
   final IconData icon;
   final String label;
   final String? badge;
   final bool selected;
   final VoidCallback onTap;
+  final Widget? trailing;
 
   const _SidebarItem({
     required this.icon,
@@ -2831,44 +3137,90 @@ class _SidebarItem extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.badge,
+    this.trailing,
   });
 
   @override
+  State<_SidebarItem> createState() => _SidebarItemState();
+}
+
+class _SidebarItemState extends State<_SidebarItem> {
+  bool hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        height: 48,
-        color: selected ? const Color(0xffffbd0a) : Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 22),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 20,
-              color: selected ? Colors.deepOrange : Colors.deepOrange,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 15,
-                  color: AppColors.text,
-                  fontWeight: FontWeight.w500,
-                ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => hovered = true),
+      onExit: (_) => setState(() => hovered = false),
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(13),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 190),
+          height: 48,
+          margin: const EdgeInsets.only(bottom: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          decoration: BoxDecoration(
+            gradient: widget.selected
+                ? const LinearGradient(
+                    colors: [Color(0xFF294AEF), Color(0xFF00BDEB)],
+                  )
+                : null,
+            color: !widget.selected && hovered
+                ? Colors.white.withValues(alpha: .075)
+                : null,
+            borderRadius: BorderRadius.circular(13),
+            boxShadow: widget.selected
+                ? const [
+                    BoxShadow(
+                      color: Color(0x552358FF),
+                      blurRadius: 20,
+                      offset: Offset(0, 7),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                widget.icon,
+                size: 20,
+                color: widget.selected || hovered
+                    ? Colors.white
+                    : Colors.white70,
               ),
-            ),
-            if (badge != null)
-              CircleAvatar(
-                radius: 13,
-                backgroundColor: Colors.redAccent,
+              const SizedBox(width: 13),
+              Expanded(
                 child: Text(
-                  badge!,
-                  style: const TextStyle(color: Colors.white),
+                  widget.label,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: widget.selected || hovered
+                        ? Colors.white
+                        : Colors.white70,
+                    fontWeight: widget.selected
+                        ? FontWeight.w700
+                        : FontWeight.w500,
+                  ),
                 ),
               ),
-          ],
+              if (widget.badge != null)
+                CircleAvatar(
+                  radius: 11,
+                  backgroundColor: Colors.redAccent,
+                  child: Text(
+                    widget.badge!,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              if (widget.trailing != null) widget.trailing!,
+            ],
+          ),
         ),
       ),
     );
@@ -2894,15 +3246,28 @@ class _SidebarSubItem extends StatelessWidget {
       onTap: onTap,
       child: Container(
         height: 38,
-        color: selected ? const Color(0xfffff4ce) : Colors.white,
-        padding: const EdgeInsets.only(left: 52, right: 18),
+        margin: const EdgeInsets.only(bottom: 3),
+        decoration: BoxDecoration(
+          color: selected
+              ? Colors.white.withValues(alpha: .1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        padding: const EdgeInsets.only(left: 40, right: 14),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: Colors.deepOrange),
+            Icon(
+              icon,
+              size: 17,
+              color: selected ? AppColors.cyan : Colors.white54,
+            ),
             const SizedBox(width: 10),
             Text(
               label,
-              style: const TextStyle(fontSize: 13, color: AppColors.text),
+              style: TextStyle(
+                fontSize: 12.5,
+                color: selected ? Colors.white : Colors.white60,
+              ),
             ),
           ],
         ),
@@ -2962,82 +3327,684 @@ class _MetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 88,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.035),
-              blurRadius: 12,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
+      height: 112,
+      child: WebHoverSurface(
+        padding: const EdgeInsets.fromLTRB(16, 15, 18, 15),
         child: Row(
           children: [
             Container(
-              width: 48,
-              height: 48,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(9),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [color.withValues(alpha: .72), color],
+                ),
+                borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: color.withValues(alpha: 0.16),
-                    blurRadius: 10,
-                    offset: const Offset(0, 6),
+                    color: color.withValues(alpha: 0.28),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
-              child: Icon(icon, color: Colors.white, size: 26),
+              child: Icon(icon, color: Colors.white, size: 29),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 15),
             Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        value,
+                        maxLines: 1,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          height: 1,
+                          color: AppColors.text,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 10.5,
+                            height: 1.25,
+                            color: AppColors.subText,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WebLoadingView extends StatelessWidget {
+  final String message;
+
+  const _WebLoadingView({super.key, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 360,
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 34,
+              height: 34,
+              child: CircularProgressIndicator(strokeWidth: 3),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.text,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Please wait a moment',
+              style: TextStyle(color: AppColors.subText, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MultiAssetSearchDialog extends StatefulWidget {
+  final List<AssetStockModel> assets;
+  final List<String> branches;
+  final String? initialBranch;
+  final String actionLabel;
+
+  const _MultiAssetSearchDialog({
+    required this.assets,
+    required this.branches,
+    required this.initialBranch,
+    required this.actionLabel,
+  });
+
+  @override
+  State<_MultiAssetSearchDialog> createState() =>
+      _MultiAssetSearchDialogState();
+}
+
+class _MultiAssetSearchDialogState extends State<_MultiAssetSearchDialog> {
+  final searchController = TextEditingController();
+  final Map<String, AssetStockModel> selectedAssets = {};
+  String search = '';
+  String? selectedBranch;
+
+  @override
+  void initState() {
+    super.initState();
+    selectedBranch = widget.initialBranch;
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  List<AssetStockModel> get suggestions {
+    final query = search.trim().toLowerCase();
+    if (query.isEmpty) return const [];
+
+    return widget.assets
+        .where((asset) {
+          final matchesBranch =
+              selectedBranch == null || asset.location == selectedBranch;
+          final matchesSearch =
+              asset.name.toLowerCase().contains(query) ||
+              asset.itemCode.toLowerCase().contains(query) ||
+              asset.assetCode.toLowerCase().contains(query) ||
+              asset.description.toLowerCase().contains(query) ||
+              asset.category.toLowerCase().contains(query) ||
+              asset.subCategory.toLowerCase().contains(query) ||
+              asset.brand.toLowerCase().contains(query) ||
+              asset.location.toLowerCase().contains(query) ||
+              asset.projectName.toLowerCase().contains(query);
+          return matchesBranch && matchesSearch;
+        })
+        .toList(growable: false);
+  }
+
+  void _toggleAsset(AssetStockModel asset) {
+    setState(() {
+      if (selectedAssets.containsKey(asset.itemCode)) {
+        selectedAssets.remove(asset.itemCode);
+      } else {
+        selectedAssets[asset.itemCode] = asset;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final results = suggestions;
+
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 36, vertical: 28),
+      titlePadding: const EdgeInsets.fromLTRB(24, 20, 16, 8),
+      contentPadding: const EdgeInsets.fromLTRB(24, 10, 24, 18),
+      actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Row(
+        children: [
+          const Expanded(child: Text('Select Assets')),
+          if (selectedAssets.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.primaryColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(99),
+              ),
               child: Text(
-                title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                '${selectedAssets.length} selected',
                 style: const TextStyle(
-                  fontSize: 13,
-                  height: 1.12,
-                  color: AppColors.text,
-                  fontWeight: FontWeight.w700,
+                  color: AppColors.primaryColor,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 900,
+        height: 520,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    height: 1,
-                    color: AppColors.text,
-                    fontWeight: FontWeight.w800,
+                Expanded(
+                  flex: 2,
+                  child: TextField(
+                    controller: searchController,
+                    autofocus: true,
+                    onChanged: (value) => setState(() => search = value),
+                    decoration: InputDecoration(
+                      hintText: 'Search by asset, tag ID, site or location...',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: search.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Clear search',
+                              onPressed: () {
+                                searchController.clear();
+                                setState(() => search = '');
+                              },
+                              icon: const Icon(Icons.close, size: 19),
+                            ),
+                      border: const OutlineInputBorder(),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.subText,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: selectedBranch,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Location',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child: Text('All Locations'),
+                      ),
+                      ...widget.branches.map(
+                        (branch) => DropdownMenuItem<String>(
+                          value: branch,
+                          child: Text(branch, overflow: TextOverflow.ellipsis),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => selectedBranch = value),
                   ),
                 ),
               ],
             ),
+            if (selectedAssets.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 42,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: selectedAssets.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final asset = selectedAssets.values.elementAt(index);
+                    return InputChip(
+                      label: Text('${asset.itemCode} · ${asset.location}'),
+                      onDeleted: () => _toggleAsset(asset),
+                      deleteIcon: const Icon(Icons.close, size: 17),
+                    );
+                  },
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: search.trim().isEmpty
+                    ? const _AssetSearchPrompt()
+                    : results.isEmpty
+                    ? const Center(child: Text('No matching assets found'))
+                    : Column(
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            color: AppColors.blueSoft,
+                            child: Text(
+                              '${results.length} matching assets',
+                              style: const TextStyle(
+                                color: AppColors.subText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: ListView.separated(
+                              itemCount: results.length,
+                              separatorBuilder: (_, _) => const Divider(
+                                height: 1,
+                                color: AppColors.border,
+                              ),
+                              itemBuilder: (context, index) {
+                                final asset = results[index];
+                                final isSelected = selectedAssets.containsKey(
+                                  asset.itemCode,
+                                );
+                                return Material(
+                                  color: isSelected
+                                      ? const Color(0xfffff8de)
+                                      : Colors.white,
+                                  child: InkWell(
+                                    onTap: () => _toggleAsset(asset),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 10,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Checkbox(
+                                            value: isSelected,
+                                            onChanged: (_) =>
+                                                _toggleAsset(asset),
+                                          ),
+                                          _AssetImage(path: asset.imagePath),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            flex: 2,
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  asset.name,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 3),
+                                                Text(
+                                                  asset.itemCode,
+                                                  style: const TextStyle(
+                                                    color:
+                                                        AppColors.primaryColor,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: _SearchResultInfo(
+                                              icon: Icons.location_on_outlined,
+                                              label: 'Location',
+                                              value: asset.location,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: _SearchResultInfo(
+                                              icon: Icons.business_outlined,
+                                              label: 'Site',
+                                              value: asset.projectName,
+                                            ),
+                                          ),
+                                          _StatusPill(status: asset.status),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
           ],
+        ),
+      ),
+      actions: [
+        OutlinedButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton.icon(
+          onPressed: selectedAssets.isEmpty
+              ? null
+              : () => Navigator.pop(
+                  context,
+                  selectedAssets.values.toList(growable: false),
+                ),
+          icon: const Icon(Icons.arrow_forward, color: Colors.white),
+          label: Text(
+            selectedAssets.isEmpty
+                ? widget.actionLabel
+                : '${widget.actionLabel} (${selectedAssets.length})',
+            style: const TextStyle(color: Colors.white),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primaryColor,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AssetSearchPrompt extends StatelessWidget {
+  const _AssetSearchPrompt();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.manage_search, size: 48, color: AppColors.subText),
+          SizedBox(height: 10),
+          Text(
+            'Start typing to find assets',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          SizedBox(height: 5),
+          Text(
+            'Suggestions will appear with their location and site',
+            style: TextStyle(color: AppColors.subText),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SearchResultInfo extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _SearchResultInfo({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 17, color: AppColors.subText),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(fontSize: 11, color: AppColors.subText),
+              ),
+              Text(
+                value.trim().isEmpty ? '-' : value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PagedItems<T> {
+  final List<T> items;
+  final int currentPage;
+  final int totalPages;
+  final int totalItems;
+
+  const _PagedItems({
+    required this.items,
+    required this.currentPage,
+    required this.totalPages,
+    required this.totalItems,
+  });
+}
+
+class _PaginationBar extends StatelessWidget {
+  final int currentPage;
+  final int totalPages;
+  final int totalItems;
+  final int pageSize;
+  final ValueChanged<int> onPageChanged;
+
+  const _PaginationBar({
+    required this.currentPage,
+    required this.totalPages,
+    required this.totalItems,
+    required this.pageSize,
+    required this.onPageChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    var firstPage = currentPage - 2;
+    if (firstPage < 0) firstPage = 0;
+    var lastPage = firstPage + 4;
+    if (lastPage >= totalPages) lastPage = totalPages - 1;
+    firstPage = (lastPage - 4).clamp(0, totalPages - 1);
+
+    final firstItem = currentPage * pageSize + 1;
+    final lastItem = ((currentPage + 1) * pageSize).clamp(0, totalItems);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xfff8fafc),
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Text(
+            'Showing $firstItem–$lastItem of $totalItems assets',
+            style: const TextStyle(
+              color: AppColors.subText,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Spacer(),
+          _PaginationIconButton(
+            tooltip: 'First page',
+            icon: Icons.first_page,
+            enabled: currentPage > 0,
+            onPressed: () => onPageChanged(0),
+          ),
+          _PaginationIconButton(
+            tooltip: 'Previous page',
+            icon: Icons.chevron_left,
+            enabled: currentPage > 0,
+            onPressed: () => onPageChanged(currentPage - 1),
+          ),
+          const SizedBox(width: 6),
+          for (var page = firstPage; page <= lastPage; page++) ...[
+            _PaginationPageButton(
+              page: page,
+              selected: page == currentPage,
+              onPressed: () => onPageChanged(page),
+            ),
+            if (page != lastPage) const SizedBox(width: 5),
+          ],
+          const SizedBox(width: 6),
+          _PaginationIconButton(
+            tooltip: 'Next page',
+            icon: Icons.chevron_right,
+            enabled: currentPage < totalPages - 1,
+            onPressed: () => onPageChanged(currentPage + 1),
+          ),
+          _PaginationIconButton(
+            tooltip: 'Last page',
+            icon: Icons.last_page,
+            enabled: currentPage < totalPages - 1,
+            onPressed: () => onPageChanged(totalPages - 1),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaginationIconButton extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  const _PaginationIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      onPressed: enabled ? onPressed : null,
+      icon: Icon(icon, size: 20),
+    );
+  }
+}
+
+class _PaginationPageButton extends StatelessWidget {
+  final int page;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  const _PaginationPageButton({
+    required this.page,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 34,
+      height: 34,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          foregroundColor: selected ? Colors.white : AppColors.headerText,
+          backgroundColor: selected ? AppColors.primaryColor : Colors.white,
+          side: BorderSide(
+            color: selected ? AppColors.primaryColor : AppColors.border,
+          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
+        child: Text(
+          '${page + 1}',
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -3053,26 +4020,14 @@ class _Panel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return WebHoverSurface(
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.025),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (title.isNotEmpty || trailing != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
+              padding: const EdgeInsets.fromLTRB(20, 17, 20, 15),
               child: Row(
                 children: [
                   if (title.isNotEmpty)
@@ -3083,7 +4038,7 @@ class _Panel extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 19,
+                            fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: AppColors.text,
                           ),
@@ -3097,7 +4052,7 @@ class _Panel extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 19,
+                            fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: AppColors.text,
                           ),
@@ -3116,9 +4071,105 @@ class _Panel extends StatelessWidget {
             ),
           if (title.isNotEmpty || trailing != null)
             const Divider(height: 1, color: AppColors.border),
-          Padding(padding: const EdgeInsets.all(18), child: child),
+          Padding(padding: const EdgeInsets.all(20), child: child),
         ],
       ),
+    );
+  }
+}
+
+class _ListToolbar extends StatelessWidget {
+  final TextEditingController searchController;
+  final String searchHint;
+  final String? selectedStatus;
+  final List<String> statuses;
+  final ValueChanged<String> onSearchChanged;
+  final ValueChanged<String?> onStatusChanged;
+  final VoidCallback onExport;
+  final bool showStatusAndExport;
+
+  const _ListToolbar({
+    required this.searchController,
+    required this.searchHint,
+    required this.selectedStatus,
+    required this.statuses,
+    required this.onSearchChanged,
+    required this.onStatusChanged,
+    required this.onExport,
+    this.showStatusAndExport = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: showStatusAndExport ? 195 : 280,
+          child: TextField(
+            controller: searchController,
+            onChanged: onSearchChanged,
+            decoration: InputDecoration(
+              hintText: searchHint,
+              prefixIcon: const Icon(Icons.search, size: 20),
+              isDense: true,
+            ),
+          ),
+        ),
+        if (showStatusAndExport) ...[
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 135,
+            child: DropdownButtonFormField<String>(
+              key: ValueKey(selectedStatus),
+              initialValue: selectedStatus ?? '__all__',
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Status',
+                isDense: true,
+              ),
+              items: [
+                const DropdownMenuItem(
+                  value: '__all__',
+                  child: Text('All Statuses'),
+                ),
+                ...statuses.map(
+                  (status) => DropdownMenuItem(
+                    value: status,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: _assetStatusColor(status),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(status, overflow: TextOverflow.ellipsis),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              onChanged: (value) =>
+                  onStatusChanged(value == '__all__' ? null : value),
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: onExport,
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            ),
+            icon: const Icon(Icons.file_download_outlined, size: 18),
+            label: const Text('Export'),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -3161,7 +4212,7 @@ class _CalendarDayHeader extends StatelessWidget {
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xfffffbec),
+          color: AppColors.blueSoft,
           border: Border.all(color: AppColors.border),
         ),
         child: Text(
@@ -3230,7 +4281,19 @@ class _LargeAssetImage extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: hasImage
-          ? Image.network(path!, fit: BoxFit.cover)
+          ? Image.network(
+              path!,
+              width: 38,
+              height: 38,
+              cacheWidth: 96,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.low,
+              errorBuilder: (_, _, _) => const Icon(
+                Icons.broken_image_outlined,
+                color: AppColors.subText,
+                size: 20,
+              ),
+            )
           : const Icon(
               Icons.inventory_2_outlined,
               color: AppColors.primaryColor,
@@ -3361,7 +4424,7 @@ class _AssetTableHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xfffffbec),
+      color: AppColors.blueSoft,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       child: Row(
         children: [
@@ -3560,6 +4623,146 @@ class _AssetImage extends StatelessWidget {
   }
 }
 
+Color _assetStatusColor(String status) {
+  switch (status.trim().toLowerCase()) {
+    case 'damaged':
+    case 'bad':
+    case 'disposed':
+    case 'lost':
+      return const Color(0xFFE53935);
+    case 'maintenance':
+    case 'in maintenance':
+      return const Color(0xFFF59E0B);
+    case 'new':
+      return const Color(0xFF2563EB);
+    case 'reserved':
+      return const Color(0xFF7C3AED);
+    case 'good':
+    case 'active':
+      return const Color(0xFF22A447);
+    default:
+      return AppColors.subText;
+  }
+}
+
+class _AlertSummaryCard extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String value;
+  final String note;
+
+  const _AlertSummaryCard({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.value,
+    required this.note,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return WebHoverSurface(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppColors.subText,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.text,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  note,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.subText,
+                    fontSize: 10.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AlertEmptyState extends StatelessWidget {
+  const _AlertEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 260,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 74,
+              height: 74,
+              decoration: const BoxDecoration(
+                color: AppColors.blueSoft,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.notifications_none_rounded,
+                size: 34,
+                color: AppColors.primaryColor,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Everything looks clear',
+              style: TextStyle(
+                color: AppColors.text,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'There are no maintenance alerts due in the next 3 days.',
+              style: TextStyle(color: AppColors.subText),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StatusPill extends StatelessWidget {
   final String status;
 
@@ -3567,12 +4770,7 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final normalized = status.toLowerCase();
-    final color = normalized == 'disposed'
-        ? Colors.red
-        : normalized == 'maintenance'
-        ? Colors.orange
-        : Colors.green;
+    final color = _assetStatusColor(status);
 
     return Align(
       alignment: Alignment.centerLeft,

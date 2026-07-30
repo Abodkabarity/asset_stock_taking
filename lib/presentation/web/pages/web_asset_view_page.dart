@@ -6,9 +6,11 @@ import '../../../core/services/barcode_print_service.dart';
 import '../../../core/utils/asset_classification_utils.dart';
 import '../../../data/models/asset_stock_model.dart';
 import '../data/web_asset_repository.dart';
+import '../utils/web_page_route.dart';
 import '../widgets/web_asset_image.dart';
 import '../widgets/web_asset_info_table.dart';
 import '../widgets/web_asset_shell.dart';
+import '../widgets/web_hover_surface.dart';
 import 'web_asset_add_page.dart';
 import 'web_asset_edit_page.dart';
 
@@ -21,12 +23,11 @@ class WebAssetViewPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return WebAssetShell(
       selectedSection: WebShellSection.assets,
+      title: 'Asset View',
       onAddAsset: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => WebAssetAddPage(initialBranch: asset.location),
-          ),
+          webPageRoute(WebAssetAddPage(initialBranch: asset.location)),
         );
       },
       child: SingleChildScrollView(
@@ -41,7 +42,7 @@ class WebAssetViewPage extends StatelessWidget {
                   children: [
                     const Icon(
                       Icons.extension_outlined,
-                      color: Colors.deepOrange,
+                      color: AppColors.primaryColor,
                     ),
                     const SizedBox(width: 12),
                     const Text(
@@ -85,9 +86,8 @@ class _TopCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return WebHoverSurface(
       padding: const EdgeInsets.all(22),
-      color: Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -407,8 +407,7 @@ class _TabsCardState extends State<_TabsCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white,
+    return WebHoverSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -465,7 +464,7 @@ class _TabHeader extends StatelessWidget {
                   border: Border(
                     bottom: BorderSide(
                       color: selected
-                          ? const Color(0xffffbd0a)
+                          ? AppColors.primaryColor
                           : Colors.transparent,
                       width: 3,
                     ),
@@ -721,7 +720,7 @@ class _HistoryEvent extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.history, size: 18, color: Colors.deepOrange),
+          const Icon(Icons.history, size: 18, color: AppColors.primaryColor),
           const SizedBox(width: 12),
           SizedBox(
             width: 170,

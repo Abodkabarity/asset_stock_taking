@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/asset_stock_model.dart';
 import '../pages/web_asset_edit_page.dart';
+import '../utils/web_page_route.dart';
 import '../pages/web_asset_view_page.dart';
 import 'web_asset_image.dart';
 import 'web_asset_info_table.dart';
@@ -115,7 +116,7 @@ class WebAssetQuickViewDialog extends StatelessWidget {
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xffffbd0a),
+                      backgroundColor: AppColors.primaryColor,
                       foregroundColor: Colors.black,
                     ),
                     child: const Text('More Details'),
@@ -126,9 +127,7 @@ class WebAssetQuickViewDialog extends StatelessWidget {
                       Navigator.pop(context);
                       await Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => WebAssetEditPage(asset: asset),
-                        ),
+                        webPageRoute(WebAssetEditPage(asset: asset)),
                       );
                       onRefresh();
                     },

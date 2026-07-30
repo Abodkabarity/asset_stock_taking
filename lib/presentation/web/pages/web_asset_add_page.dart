@@ -7,6 +7,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../data/models/asset_item_model.dart';
 import '../data/web_asset_repository.dart';
 import '../widgets/web_asset_shell.dart';
+import '../widgets/web_hover_surface.dart';
 
 class WebAssetAddPage extends StatefulWidget {
   final String? initialBranch;
@@ -215,6 +216,7 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
   Widget build(BuildContext context) {
     return WebAssetShell(
       selectedSection: WebShellSection.assets,
+      title: 'Add Asset',
       child: loading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -229,7 +231,7 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
                         children: [
                           const Icon(
                             Icons.add_circle_outline,
-                            color: Colors.deepOrange,
+                            color: AppColors.primaryColor,
                           ),
                           const SizedBox(width: 12),
                           const Text(
@@ -248,16 +250,15 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
                           ElevatedButton(
                             onPressed: saving ? null : _save,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xffffbd0a),
-                              foregroundColor: Colors.black,
+                              backgroundColor: AppColors.primaryColor,
+                              foregroundColor: Colors.white,
                             ),
                             child: Text(saving ? 'Saving...' : 'Save'),
                           ),
                         ],
                       ),
                       const SizedBox(height: 18),
-                      Container(
-                        color: Colors.white,
+                      WebHoverSurface(
                         padding: const EdgeInsets.all(22),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,

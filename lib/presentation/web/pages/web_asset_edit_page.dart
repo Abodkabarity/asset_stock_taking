@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/asset_stock_model.dart';
 import '../data/web_asset_repository.dart';
+import '../utils/web_page_route.dart';
 import '../widgets/web_asset_image.dart';
 import '../widgets/web_asset_shell.dart';
+import '../widgets/web_hover_surface.dart';
 import 'web_asset_add_page.dart';
 
 class WebAssetEditPage extends StatefulWidget {
@@ -160,13 +162,11 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
   Widget build(BuildContext context) {
     return WebAssetShell(
       selectedSection: WebShellSection.assets,
+      title: 'Edit Asset',
       onAddAsset: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) =>
-                WebAssetAddPage(initialBranch: widget.asset.location),
-          ),
+          webPageRoute(WebAssetAddPage(initialBranch: widget.asset.location)),
         );
       },
       child: SingleChildScrollView(
@@ -179,7 +179,7 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.edit, color: Colors.deepOrange),
+                    const Icon(Icons.edit, color: AppColors.primaryColor),
                     const SizedBox(width: 12),
                     const Text(
                       'Edit Asset',
@@ -197,16 +197,15 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
                     ElevatedButton(
                       onPressed: saving ? null : _save,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xffffbd0a),
-                        foregroundColor: Colors.black,
+                        backgroundColor: AppColors.primaryColor,
+                        foregroundColor: Colors.white,
                       ),
                       child: Text(saving ? 'Saving...' : 'Save'),
                     ),
                   ],
                 ),
                 const SizedBox(height: 18),
-                Container(
-                  color: Colors.white,
+                WebHoverSurface(
                   padding: const EdgeInsets.all(22),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
