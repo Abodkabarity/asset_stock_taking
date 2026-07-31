@@ -11,8 +11,19 @@ import '../widgets/web_hover_surface.dart';
 
 class WebAssetAddPage extends StatefulWidget {
   final String? initialBranch;
+  final bool inventoryMode;
+  final bool embedded;
+  final VoidCallback? onCancel;
+  final VoidCallback? onSaved;
 
-  const WebAssetAddPage({super.key, this.initialBranch});
+  const WebAssetAddPage({
+    super.key,
+    this.initialBranch,
+    this.inventoryMode = false,
+    this.embedded = false,
+    this.onCancel,
+    this.onSaved,
+  });
 
   @override
   State<WebAssetAddPage> createState() => _WebAssetAddPageState();
@@ -81,7 +92,10 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
 
     setState(() {
       branches = loadedBranches;
-      masterItems = loadedItems;
+      masterItems = loadedItems.where((item) {
+        final type = item.assetInventory.trim().toLowerCase();
+        return type == (widget.inventoryMode ? 'inventory' : 'asset');
+      }).toList();
       branch = nextBranch;
       projects = loadedProjects;
       project = loadedProjects.isEmpty ? null : loadedProjects.first;
@@ -209,14 +223,29 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
       saving = false;
     });
 
-    Navigator.pop(context, true);
+    if (widget.onSaved != null) {
+      widget.onSaved!();
+    } else {
+      Navigator.pop(context, true);
+    }
+  }
+
+  void _cancel() {
+    if (widget.onCancel != null) {
+      widget.onCancel!();
+    } else {
+      Navigator.pop(context, false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return WebAssetShell(
-      selectedSection: WebShellSection.assets,
-      title: 'Add Asset',
+      embedded: widget.embedded,
+      selectedSection: widget.inventoryMode
+          ? WebShellSection.inventory
+          : WebShellSection.assets,
+      title: widget.inventoryMode ? 'Add Inventory' : 'Add Asset',
       child: loading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -234,16 +263,18 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
                             color: AppColors.primaryColor,
                           ),
                           const SizedBox(width: 12),
-                          const Text(
-                            'Add an Asset',
-                            style: TextStyle(
+                          Text(
+                            widget.inventoryMode
+                                ? 'Add Inventory'
+                                : 'Add an Asset',
+                            style: const TextStyle(
                               fontSize: 28,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
                           const Spacer(),
                           OutlinedButton(
-                            onPressed: () => Navigator.pop(context, false),
+                            onPressed: _cancel,
                             child: const Text('Cancel'),
                           ),
                           const SizedBox(width: 10),
@@ -263,9 +294,13 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Asset Details',
-                              style: TextStyle(fontWeight: FontWeight.bold),
+                            Text(
+                              widget.inventoryMode
+                                  ? 'Inventory Details'
+                                  : 'Asset Details',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(height: 18),
                             Autocomplete<AssetItemModel>(
@@ -303,7 +338,9 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
                                       controller: controller,
                                       focusNode: focusNode,
                                       decoration: _decoration(
-                                        'Search Master Asset *',
+                                        widget.inventoryMode
+                                            ? 'Search Master Inventory *'
+                                            : 'Search Master Asset *',
                                       ),
                                     );
                                   },
@@ -639,13 +676,8 @@ class _DropdownField extends StatelessWidget {
 class _MoneyField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
-  final bool readOnly;
 
-  const _MoneyField({
-    required this.label,
-    required this.controller,
-    this.readOnly = false,
-  });
+  const _MoneyField({required this.label, required this.controller});
 
   @override
   Widget build(BuildContext context) {
@@ -653,7 +685,6 @@ class _MoneyField extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 14),
       child: TextField(
         controller: controller,
-        readOnly: readOnly,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         decoration: _decoration(label).copyWith(
           prefixIcon: Container(
@@ -666,7 +697,6 @@ class _MoneyField extends StatelessWidget {
             ),
             child: const Text('AED'),
           ),
-          hintText: readOnly ? 'United Arab Emirates Dirham' : null,
         ),
       ),
     );

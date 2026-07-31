@@ -18,6 +18,7 @@ class WebAssetShell extends StatelessWidget {
   final WebShellSection selectedSection;
   final String title;
   final VoidCallback? onAddAsset;
+  final bool embedded;
 
   const WebAssetShell({
     super.key,
@@ -25,10 +26,13 @@ class WebAssetShell extends StatelessWidget {
     required this.selectedSection,
     this.title = 'Assets',
     this.onAddAsset,
+    this.embedded = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (embedded) return child;
+
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: Row(

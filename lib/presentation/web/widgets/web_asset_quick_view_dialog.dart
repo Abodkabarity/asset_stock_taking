@@ -2,20 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/asset_stock_model.dart';
-import '../pages/web_asset_edit_page.dart';
-import '../pages/web_asset_view_page.dart';
-import '../utils/web_page_route.dart';
 import 'web_asset_image.dart';
 import 'web_asset_info_table.dart';
 
 class WebAssetQuickViewDialog extends StatelessWidget {
   final AssetStockModel asset;
-  final VoidCallback onRefresh;
+  final VoidCallback onMoreDetails;
+  final VoidCallback onEdit;
 
   const WebAssetQuickViewDialog({
     super.key,
     required this.asset,
-    required this.onRefresh,
+    required this.onMoreDetails,
+    required this.onEdit,
   });
 
   @override
@@ -108,12 +107,7 @@ class WebAssetQuickViewDialog extends StatelessWidget {
                   ElevatedButton(
                     onPressed: () {
                       Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => WebAssetViewPage(asset: asset),
-                        ),
-                      );
+                      onMoreDetails();
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryColor,
@@ -126,13 +120,9 @@ class WebAssetQuickViewDialog extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   OutlinedButton.icon(
-                    onPressed: () async {
+                    onPressed: () {
                       Navigator.pop(context);
-                      await Navigator.push(
-                        context,
-                        webPageRoute(WebAssetEditPage(asset: asset)),
-                      );
-                      onRefresh();
+                      onEdit();
                     },
                     icon: const Icon(Icons.edit, size: 17),
                     label: const Text('Edit Asset'),

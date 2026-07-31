@@ -14,8 +14,17 @@ import 'web_asset_add_page.dart';
 
 class WebAssetEditPage extends StatefulWidget {
   final AssetStockModel asset;
+  final bool embedded;
+  final VoidCallback? onCancel;
+  final VoidCallback? onSaved;
 
-  const WebAssetEditPage({super.key, required this.asset});
+  const WebAssetEditPage({
+    super.key,
+    required this.asset,
+    this.embedded = false,
+    this.onCancel,
+    this.onSaved,
+  });
 
   @override
   State<WebAssetEditPage> createState() => _WebAssetEditPageState();
@@ -155,12 +164,25 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
     setState(() {
       saving = false;
     });
-    Navigator.pop(context);
+    if (widget.onSaved != null) {
+      widget.onSaved!();
+    } else {
+      Navigator.pop(context);
+    }
+  }
+
+  void _cancel() {
+    if (widget.onCancel != null) {
+      widget.onCancel!();
+    } else {
+      Navigator.pop(context);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return WebAssetShell(
+      embedded: widget.embedded,
       selectedSection: WebShellSection.assets,
       title: 'Edit Asset',
       onAddAsset: () {
@@ -190,7 +212,7 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
                     ),
                     const Spacer(),
                     OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: _cancel,
                       child: const Text('Cancel'),
                     ),
                     const SizedBox(width: 10),

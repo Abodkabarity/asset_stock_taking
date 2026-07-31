@@ -35,42 +35,9 @@ class WebAssetViewPage extends StatelessWidget {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1360),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.extension_outlined,
-                      color: AppColors.primaryColor,
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Asset View',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const Spacer(),
-                    OutlinedButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.chevron_left),
-                      label: const Text('Prev.'),
-                    ),
-                    const SizedBox(width: 12),
-                    OutlinedButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      label: const Text('Next'),
-                      icon: const Icon(Icons.chevron_right),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                _TopCard(asset: asset),
-                const SizedBox(height: 22),
-                _TabsCard(asset: asset),
-              ],
+            child: WebAssetDetailsContent(
+              asset: asset,
+              onBack: () => Navigator.pop(context),
             ),
           ),
         ),
@@ -79,10 +46,75 @@ class WebAssetViewPage extends StatelessWidget {
   }
 }
 
+class WebAssetDetailsContent extends StatelessWidget {
+  final AssetStockModel asset;
+  final VoidCallback? onBack;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+  final VoidCallback? onEdit;
+
+  const WebAssetDetailsContent({
+    super.key,
+    required this.asset,
+    this.onBack,
+    this.onPrevious,
+    this.onNext,
+    this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            if (onBack != null) ...[
+              OutlinedButton.icon(
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                label: const Text('Back to Assets'),
+              ),
+              const SizedBox(width: 16),
+            ],
+            const Icon(Icons.extension_outlined, color: AppColors.primaryColor),
+            const SizedBox(width: 10),
+            const Text(
+              'Asset Details',
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w700,
+                color: AppColors.headerText,
+              ),
+            ),
+            const Spacer(),
+            OutlinedButton.icon(
+              onPressed: onPrevious,
+              icon: const Icon(Icons.chevron_left),
+              label: const Text('Previous'),
+            ),
+            const SizedBox(width: 10),
+            OutlinedButton.icon(
+              onPressed: onNext,
+              label: const Text('Next'),
+              icon: const Icon(Icons.chevron_right),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _TopCard(asset: asset, onEdit: onEdit),
+        const SizedBox(height: 22),
+        _TabsCard(key: ValueKey(asset.itemCode), asset: asset),
+      ],
+    );
+  }
+}
+
 class _TopCard extends StatelessWidget {
   final AssetStockModel asset;
+  final VoidCallback? onEdit;
 
-  const _TopCard({required this.asset});
+  const _TopCard({required this.asset, this.onEdit});
 
   @override
   Widget build(BuildContext context) {
@@ -116,6 +148,10 @@ class _TopCard extends StatelessWidget {
               ],
               OutlinedButton.icon(
                 onPressed: () {
+                  if (onEdit != null) {
+                    onEdit!();
+                    return;
+                  }
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -131,41 +167,81 @@ class _TopCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              WebAssetImage(path: asset.imagePath, width: 290, height: 260),
-              const SizedBox(width: 22),
-              Expanded(
-                flex: 3,
-                child: WebAssetInfoTable(
-                  rows: [
-                    ('Asset Tag ID', asset.itemCode),
-                    ('Purchase Date', _date(asset.createdAt)),
-                    ('Cost', asset.cost.toStringAsFixed(2)),
-                    ('Brand', asset.brand),
-                    ('Model', asset.model),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth >= 1120) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _assetImage(),
+                    const SizedBox(width: 22),
+                    Expanded(flex: 3, child: _primaryInfo()),
+                    const SizedBox(width: 22),
+                    Expanded(flex: 2, child: _secondaryInfo()),
                   ],
-                ),
-              ),
-              const SizedBox(width: 22),
-              Expanded(
-                flex: 2,
-                child: WebAssetInfoTable(
-                  rows: [
-                    ('Site', asset.projectName),
-                    ('Location', asset.location),
-                    ('Category', asset.category),
-                    ('Sub Category', asset.subCategory),
-                    ('Asset Type', asset.assetClassification),
-                    ('Status', asset.status),
+                );
+              }
+
+              if (constraints.maxWidth >= 720) {
+                return Column(
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _assetImage(),
+                        const SizedBox(width: 22),
+                        Expanded(child: _primaryInfo()),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    _secondaryInfo(),
                   ],
-                ),
-              ),
-            ],
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(child: _assetImage()),
+                  const SizedBox(height: 18),
+                  _primaryInfo(),
+                  const SizedBox(height: 18),
+                  _secondaryInfo(),
+                ],
+              );
+            },
           ),
         ],
       ),
+    );
+  }
+
+  Widget _assetImage() {
+    return WebAssetImage(path: asset.imagePath, width: 290, height: 260);
+  }
+
+  Widget _primaryInfo() {
+    return WebAssetInfoTable(
+      rows: [
+        ('Asset Tag ID', asset.itemCode),
+        ('Purchase Date', _date(asset.createdAt)),
+        ('Cost', asset.cost.toStringAsFixed(2)),
+        ('Brand', asset.brand),
+        ('Model', asset.model),
+      ],
+    );
+  }
+
+  Widget _secondaryInfo() {
+    return WebAssetInfoTable(
+      rows: [
+        ('Site', asset.projectName),
+        ('Location', asset.location),
+        ('Category', asset.category),
+        ('Sub Category', asset.subCategory),
+        ('Asset Type', asset.assetClassification),
+        ('Status', asset.status),
+      ],
     );
   }
 
@@ -396,7 +472,7 @@ class _TransferBox extends StatelessWidget {
 class _TabsCard extends StatefulWidget {
   final AssetStockModel asset;
 
-  const _TabsCard({required this.asset});
+  const _TabsCard({super.key, required this.asset});
 
   @override
   State<_TabsCard> createState() => _TabsCardState();

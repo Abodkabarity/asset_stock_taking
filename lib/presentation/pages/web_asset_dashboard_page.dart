@@ -8,8 +8,9 @@ import '../../core/utils/asset_classification_utils.dart';
 import '../../data/models/asset_stock_model.dart';
 import '../web/data/web_asset_repository.dart';
 import '../web/pages/web_asset_add_page.dart';
+import '../web/pages/web_asset_edit_page.dart';
+import '../web/pages/web_asset_view_page.dart';
 import '../web/utils/web_asset_colors.dart';
-import '../web/utils/web_page_route.dart';
 import '../web/widgets/web_asset_quick_view_dialog.dart';
 import '../web/widgets/web_hover_surface.dart';
 
@@ -93,6 +94,11 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   String? selectedStatus;
   DateTime alertMonth = DateTime(DateTime.now().year, DateTime.now().month);
   AssetStockModel? selectedMaintenanceAsset;
+  AssetStockModel? selectedDetailAsset;
+  AssetStockModel? editingAsset;
+  AssetStockModel? detailReturnAfterEdit;
+  bool addingAsset = false;
+  bool addingInventory = false;
   String maintenanceStatus = 'Open';
   bool maintenanceRepeating = false;
   bool loading = true;
@@ -158,12 +164,33 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   Future<void> _selectSection(WebAssetSection section) async {
-    if (section == selectedSection || sectionLoading) return;
+    if (sectionLoading) return;
+    if (section == selectedSection) {
+      if (selectedDetailAsset != null ||
+          addingAsset ||
+          addingInventory ||
+          editingAsset != null) {
+        setState(() {
+          selectedDetailAsset = null;
+          addingAsset = false;
+          addingInventory = false;
+          editingAsset = null;
+          detailReturnAfterEdit = null;
+        });
+        _scrollContentToTop();
+      }
+      return;
+    }
 
     setState(() {
       sectionLoading = true;
       pendingSection = section;
       selectedStatus = null;
+      selectedDetailAsset = null;
+      editingAsset = null;
+      detailReturnAfterEdit = null;
+      addingAsset = false;
+      addingInventory = false;
       searchQuery = '';
       searchController.clear();
     });
@@ -276,9 +303,10 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
 
   bool _isRegularAsset(AssetStockModel asset) {
     final status = asset.status.trim().toLowerCase();
+    final registerType = asset.assetInventory.trim().toLowerCase();
     return status != 'disposed' &&
         status != 'maintenance' &&
-        !_isInventoryAsset(asset);
+        registerType == 'asset';
   }
 
   double get totalValue {
@@ -309,15 +337,28 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     return maintenanceAlerts.length;
   }
 
-  Future<void> _addAsset() async {
-    final result = await Navigator.push<bool>(
-      context,
-      webPageRoute(WebAssetAddPage(initialBranch: selectedBranch)),
-    );
+  void _addAsset() {
+    setState(() {
+      selectedSection = WebAssetSection.assets;
+      selectedDetailAsset = null;
+      editingAsset = null;
+      detailReturnAfterEdit = null;
+      addingAsset = true;
+      addingInventory = false;
+    });
+    _scrollContentToTop();
+  }
 
-    if (result == true) {
-      await _loadData();
-    }
+  void _addInventory() {
+    setState(() {
+      selectedSection = WebAssetSection.inventory;
+      selectedDetailAsset = null;
+      editingAsset = null;
+      detailReturnAfterEdit = null;
+      addingAsset = false;
+      addingInventory = true;
+    });
+    _scrollContentToTop();
   }
 
   Future<void> _exportList(List<AssetStockModel> items, String fileName) async {
@@ -829,9 +870,88 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   Future<void> _showAssetDetails(AssetStockModel asset) async {
     await showDialog<void>(
       context: context,
-      builder: (context) =>
-          WebAssetQuickViewDialog(asset: asset, onRefresh: _loadData),
+      builder: (context) => WebAssetQuickViewDialog(
+        asset: asset,
+        onMoreDetails: () => _openAssetDetails(asset),
+        onEdit: () => _openAssetEditor(asset),
+      ),
     );
+  }
+
+  void _openAssetDetails(AssetStockModel asset) {
+    setState(() {
+      selectedSection = _isInventoryAsset(asset)
+          ? WebAssetSection.inventory
+          : WebAssetSection.assets;
+      addingAsset = false;
+      addingInventory = false;
+      editingAsset = null;
+      detailReturnAfterEdit = null;
+      selectedDetailAsset = asset;
+    });
+    _scrollContentToTop();
+  }
+
+  void _closeAssetDetails() {
+    setState(() => selectedDetailAsset = null);
+    _scrollContentToTop();
+  }
+
+  void _openAssetEditor(AssetStockModel asset, {bool returnToDetails = false}) {
+    setState(() {
+      selectedSection = _isInventoryAsset(asset)
+          ? WebAssetSection.inventory
+          : WebAssetSection.assets;
+      addingAsset = false;
+      addingInventory = false;
+      editingAsset = asset;
+      detailReturnAfterEdit = returnToDetails ? asset : null;
+      selectedDetailAsset = null;
+    });
+    _scrollContentToTop();
+  }
+
+  void _cancelAssetForm() {
+    setState(() {
+      addingAsset = false;
+      addingInventory = false;
+      editingAsset = null;
+      selectedDetailAsset = detailReturnAfterEdit;
+      detailReturnAfterEdit = null;
+    });
+    _scrollContentToTop();
+  }
+
+  Future<void> _completeAssetForm() async {
+    final editedCode = editingAsset?.itemCode;
+    final shouldReturnToDetails = detailReturnAfterEdit != null;
+    setState(() {
+      addingAsset = false;
+      addingInventory = false;
+      editingAsset = null;
+      detailReturnAfterEdit = null;
+    });
+    await _loadData();
+    if (!mounted || !shouldReturnToDetails || editedCode == null) return;
+    final updatedIndex = assets.indexWhere(
+      (asset) => asset.itemCode == editedCode,
+    );
+    if (updatedIndex < 0) return;
+    setState(() => selectedDetailAsset = assets[updatedIndex]);
+    _scrollContentToTop();
+  }
+
+  void _showAdjacentAsset(int offset) {
+    final current = selectedDetailAsset;
+    if (current == null || visibleAssets.isEmpty) return;
+    final index = visibleAssets.indexWhere(
+      (asset) => asset.itemCode == current.itemCode,
+    );
+    if (index < 0) return;
+    final nextIndex = index + offset;
+    if (nextIndex < 0 || nextIndex >= visibleAssets.length) return;
+    setState(() => selectedDetailAsset = visibleAssets[nextIndex]);
+    _scrollContentToTop();
   }
 
   Future<void> _transferAsset(AssetStockModel asset) async {
@@ -1324,6 +1444,24 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     );
   }
 
+  bool get _assetFormOpen =>
+      addingAsset || addingInventory || editingAsset != null;
+
+  String? get _workspaceTitle {
+    if (addingAsset) return 'Add Asset';
+    if (addingInventory) return 'Add Inventory';
+    if (editingAsset != null) return 'Edit Asset';
+    if (selectedDetailAsset != null) return 'Asset Details';
+    return null;
+  }
+
+  String? get _workspaceSubtitle {
+    if (addingAsset) return 'Create a new asset record';
+    if (addingInventory) return 'Create a new inventory record';
+    if (editingAsset != null) return editingAsset!.itemCode;
+    return selectedDetailAsset?.itemCode;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1336,22 +1474,34 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                 section: selectedSection,
                 alertCount: alertCount,
                 onSelected: _selectSection,
+                onAddAsset: _addAsset,
+                onAddInventory: _addInventory,
+                addingAsset: addingAsset,
+                addingInventory: addingInventory,
               ),
               Expanded(
                 child: Column(
                   children: [
                     _TopBar(
                       section: selectedSection,
+                      titleOverride: _workspaceTitle,
+                      subtitleOverride: _workspaceSubtitle,
                       selectedBranch: selectedBranch,
                       branches: branches,
                       onBranchChanged: (value) {
                         setState(() {
                           selectedBranch = value;
+                          selectedDetailAsset = null;
+                          addingAsset = false;
+                          addingInventory = false;
+                          editingAsset = null;
+                          detailReturnAfterEdit = null;
                           _sectionPages.clear();
                         });
                       },
                       onAssets: () => _selectSection(WebAssetSection.assets),
                       onAddAsset: _addAsset,
+                      onAddInventory: _addInventory,
                       onPrint: _printAssets,
                       onRefresh: _loadData,
                     ),
@@ -1367,8 +1517,21 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                                     ? 'Loading asset data...'
                                     : 'Opening ${_sectionLabel(pendingSection ?? selectedSection)}...',
                               )
+                            : _assetFormOpen
+                            ? KeyedSubtree(
+                                key: ValueKey(
+                                  addingAsset
+                                      ? 'asset-add'
+                                      : addingInventory
+                                      ? 'inventory-add'
+                                      : 'asset-edit-${editingAsset!.itemCode}',
+                                ),
+                                child: _content(),
+                              )
                             : SingleChildScrollView(
-                                key: ValueKey(selectedSection),
+                                key: ValueKey(
+                                  '${selectedSection.name}-${selectedDetailAsset?.itemCode ?? 'list'}',
+                                ),
                                 controller: contentScrollController,
                                 padding: const EdgeInsets.fromLTRB(
                                   26,
@@ -1407,7 +1570,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       case WebAssetSection.assets:
         return 'List of Assets';
       case WebAssetSection.inventory:
-        return 'Inventory';
+        return 'List of Inventory';
       case WebAssetSection.transfer:
         return 'Move Assets';
       case WebAssetSection.dispose:
@@ -1418,6 +1581,54 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   Widget _content() {
+    if (selectedSection == WebAssetSection.assets && addingAsset) {
+      return WebAssetAddPage(
+        key: ValueKey('add-${selectedBranch ?? 'all'}'),
+        initialBranch: selectedBranch,
+        embedded: true,
+        onCancel: _cancelAssetForm,
+        onSaved: () => _completeAssetForm(),
+      );
+    }
+    if (selectedSection == WebAssetSection.inventory && addingInventory) {
+      return WebAssetAddPage(
+        key: ValueKey('inventory-add-${selectedBranch ?? 'all'}'),
+        initialBranch: selectedBranch,
+        inventoryMode: true,
+        embedded: true,
+        onCancel: _cancelAssetForm,
+        onSaved: () => _completeAssetForm(),
+      );
+    }
+    if ((selectedSection == WebAssetSection.assets ||
+            selectedSection == WebAssetSection.inventory) &&
+        editingAsset != null) {
+      final asset = editingAsset!;
+      return WebAssetEditPage(
+        key: ValueKey('edit-${asset.itemCode}'),
+        asset: asset,
+        embedded: true,
+        onCancel: _cancelAssetForm,
+        onSaved: () => _completeAssetForm(),
+      );
+    }
+    if ((selectedSection == WebAssetSection.assets ||
+            selectedSection == WebAssetSection.inventory) &&
+        selectedDetailAsset != null) {
+      final asset = selectedDetailAsset!;
+      final index = visibleAssets.indexWhere(
+        (item) => item.itemCode == asset.itemCode,
+      );
+      return WebAssetDetailsContent(
+        asset: asset,
+        onBack: _closeAssetDetails,
+        onPrevious: index > 0 ? () => _showAdjacentAsset(-1) : null,
+        onNext: index >= 0 && index < visibleAssets.length - 1
+            ? () => _showAdjacentAsset(1)
+            : null,
+        onEdit: () => _openAssetEditor(asset, returnToDetails: true),
+      );
+    }
     switch (selectedSection) {
       case WebAssetSection.assets:
         return _assetsPanel();

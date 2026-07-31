@@ -2,21 +2,27 @@ part of '../../../pages/web_asset_dashboard_page.dart';
 
 class _TopBar extends StatelessWidget {
   final WebAssetSection section;
+  final String? titleOverride;
+  final String? subtitleOverride;
   final String? selectedBranch;
   final List<String> branches;
   final ValueChanged<String?> onBranchChanged;
   final VoidCallback onAssets;
   final VoidCallback onAddAsset;
+  final VoidCallback onAddInventory;
   final VoidCallback onPrint;
   final VoidCallback onRefresh;
 
   const _TopBar({
     required this.section,
+    this.titleOverride,
+    this.subtitleOverride,
     required this.selectedBranch,
     required this.branches,
     required this.onBranchChanged,
     required this.onAssets,
     required this.onAddAsset,
+    required this.onAddInventory,
     required this.onPrint,
     required this.onRefresh,
   });
@@ -25,6 +31,7 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final branchValue = selectedBranch ?? '__all__';
     final branchItems = ['__all__', ...branches];
+    final compactActions = MediaQuery.sizeOf(context).width < 1500;
 
     return Container(
       height: 92,
@@ -50,7 +57,7 @@ class _TopBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _title,
+                titleOverride ?? _title,
                 style: const TextStyle(
                   fontSize: 23,
                   fontWeight: FontWeight.w800,
@@ -59,7 +66,7 @@ class _TopBar extends StatelessWidget {
               ),
               SizedBox(height: 3),
               Text(
-                _subtitle,
+                subtitleOverride ?? _subtitle,
                 style: const TextStyle(fontSize: 12, color: AppColors.subText),
               ),
             ],
@@ -69,6 +76,7 @@ class _TopBar extends StatelessWidget {
             icon: Icons.inventory_2_outlined,
             label: 'Assets',
             onTap: onAssets,
+            compact: compactActions,
           ),
           _TopNavIcon(
             icon: Icons.add_circle_outline,
@@ -76,9 +84,15 @@ class _TopBar extends StatelessWidget {
             onTap: onAddAsset,
           ),
           _TopNavIcon(
+            icon: Icons.add_box_outlined,
+            label: 'Add Inventory',
+            onTap: onAddInventory,
+          ),
+          _TopNavIcon(
             icon: Icons.print_outlined,
             label: 'Print',
             onTap: onPrint,
+            compact: compactActions,
           ),
           const Spacer(),
           SizedBox(
@@ -154,7 +168,7 @@ class _TopBar extends StatelessWidget {
       case WebAssetSection.assets:
         return 'List of Assets';
       case WebAssetSection.inventory:
-        return 'Inventory';
+        return 'List of Inventory';
       case WebAssetSection.transfer:
         return 'Move Assets';
       case WebAssetSection.dispose:
@@ -188,11 +202,19 @@ class _Sidebar extends StatelessWidget {
   final WebAssetSection section;
   final int alertCount;
   final ValueChanged<WebAssetSection> onSelected;
+  final VoidCallback onAddAsset;
+  final VoidCallback onAddInventory;
+  final bool addingAsset;
+  final bool addingInventory;
 
   const _Sidebar({
     required this.section,
     required this.alertCount,
     required this.onSelected,
+    required this.onAddAsset,
+    required this.onAddInventory,
+    required this.addingAsset,
+    required this.addingInventory,
   });
 
   @override
@@ -262,12 +284,17 @@ class _Sidebar extends StatelessWidget {
                     selected: section == WebAssetSection.alerts,
                     onTap: () => onSelected(WebAssetSection.alerts),
                   ),
-                  _SidebarGroup(selected: section, onSelected: onSelected),
-                  _SidebarItem(
-                    icon: Icons.inventory_2_outlined,
-                    label: 'Inventory',
-                    selected: section == WebAssetSection.inventory,
-                    onTap: () => onSelected(WebAssetSection.inventory),
+                  _SidebarGroup(
+                    selected: section,
+                    onSelected: onSelected,
+                    onAddAsset: onAddAsset,
+                    addingAsset: addingAsset,
+                  ),
+                  _InventorySidebarGroup(
+                    selected: section,
+                    onSelected: onSelected,
+                    onAddInventory: onAddInventory,
+                    addingInventory: addingInventory,
                   ),
                   const Padding(
                     padding: EdgeInsets.fromLTRB(15, 15, 15, 7),
@@ -339,8 +366,15 @@ class _DashboardBrandMark extends StatelessWidget {
 class _SidebarGroup extends StatefulWidget {
   final WebAssetSection selected;
   final ValueChanged<WebAssetSection> onSelected;
+  final VoidCallback onAddAsset;
+  final bool addingAsset;
 
-  const _SidebarGroup({required this.selected, required this.onSelected});
+  const _SidebarGroup({
+    required this.selected,
+    required this.onSelected,
+    required this.onAddAsset,
+    required this.addingAsset,
+  });
 
   @override
   State<_SidebarGroup> createState() => _SidebarGroupState();
@@ -401,8 +435,16 @@ class _SidebarGroupState extends State<_SidebarGroup> {
                       _SidebarSubItem(
                         icon: Icons.format_list_bulleted,
                         label: 'List of Assets',
-                        selected: widget.selected == WebAssetSection.assets,
+                        selected:
+                            widget.selected == WebAssetSection.assets &&
+                            !widget.addingAsset,
                         onTap: () => widget.onSelected(WebAssetSection.assets),
+                      ),
+                      _SidebarSubItem(
+                        icon: Icons.add_circle_outline_rounded,
+                        label: 'Add Asset',
+                        selected: widget.addingAsset,
+                        onTap: widget.onAddAsset,
                       ),
                       _SidebarSubItem(
                         icon: Icons.open_with,
@@ -424,6 +466,94 @@ class _SidebarGroupState extends State<_SidebarGroup> {
                             widget.selected == WebAssetSection.maintenance,
                         onTap: () =>
                             widget.onSelected(WebAssetSection.maintenance),
+                      ),
+                    ],
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InventorySidebarGroup extends StatefulWidget {
+  final WebAssetSection selected;
+  final ValueChanged<WebAssetSection> onSelected;
+  final VoidCallback onAddInventory;
+  final bool addingInventory;
+
+  const _InventorySidebarGroup({
+    required this.selected,
+    required this.onSelected,
+    required this.onAddInventory,
+    required this.addingInventory,
+  });
+
+  @override
+  State<_InventorySidebarGroup> createState() => _InventorySidebarGroupState();
+}
+
+class _InventorySidebarGroupState extends State<_InventorySidebarGroup> {
+  late bool expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    expanded = widget.selected == WebAssetSection.inventory;
+  }
+
+  @override
+  void didUpdateWidget(covariant _InventorySidebarGroup oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected == WebAssetSection.inventory &&
+        oldWidget.selected != WebAssetSection.inventory) {
+      expanded = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _SidebarItem(
+          icon: Icons.inventory_2_outlined,
+          label: 'Inventory',
+          selected: false,
+          onTap: () => setState(() => expanded = !expanded),
+          trailing: AnimatedRotation(
+            turns: expanded ? .25 : 0,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            child: const Icon(
+              Icons.chevron_right_rounded,
+              size: 19,
+              color: Colors.white70,
+            ),
+          ),
+        ),
+        ClipRect(
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: expanded
+                ? Column(
+                    children: [
+                      _SidebarSubItem(
+                        icon: Icons.format_list_bulleted_rounded,
+                        label: 'List of Inventory',
+                        selected:
+                            widget.selected == WebAssetSection.inventory &&
+                            !widget.addingInventory,
+                        onTap: () =>
+                            widget.onSelected(WebAssetSection.inventory),
+                      ),
+                      _SidebarSubItem(
+                        icon: Icons.add_box_outlined,
+                        label: 'Add Inventory',
+                        selected: widget.addingInventory,
+                        onTap: widget.onAddInventory,
                       ),
                     ],
                   )
@@ -592,29 +722,42 @@ class _TopNavIcon extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool compact;
 
   const _TopNavIcon({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Row(
-          children: [
-            Icon(icon, size: 21, color: AppColors.secondaryColor),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-            ),
-          ],
+    return Tooltip(
+      message: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 7 : 10,
+            vertical: 8,
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 21, color: AppColors.secondaryColor),
+              if (!compact) ...[
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

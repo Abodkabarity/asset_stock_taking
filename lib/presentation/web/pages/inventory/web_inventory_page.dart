@@ -6,7 +6,7 @@ extension _InventoryPageExtension on _WebAssetDashboardPageState {
     final pagedAssets = _paginate(inventoryAssets, WebAssetSection.inventory);
 
     return _Panel(
-      title: 'Inventory',
+      title: 'Inventory Directory',
       trailing: _ListToolbar(
         searchController: searchController,
         searchHint: 'Search Inventory',
