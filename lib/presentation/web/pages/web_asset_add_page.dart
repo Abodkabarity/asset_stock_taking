@@ -524,21 +524,24 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
                               decoration: _decoration('Description'),
                             ),
                             const SizedBox(height: 18),
-                            SwitchListTile(
-                              value: hasWarranty,
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('Warranty'),
-                              activeThumbColor: AppColors.primaryColor,
-                              onChanged: (value) {
-                                setState(() {
-                                  hasWarranty = value;
-                                  if (!hasWarranty) {
-                                    selectedWarrantyImageBytes = null;
-                                    selectedWarrantyImageName = null;
-                                    warrantyDescriptionController.clear();
-                                  }
-                                });
-                              },
+                            Material(
+                              color: Colors.transparent,
+                              child: SwitchListTile(
+                                value: hasWarranty,
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('Warranty'),
+                                activeThumbColor: AppColors.primaryColor,
+                                onChanged: (value) {
+                                  setState(() {
+                                    hasWarranty = value;
+                                    if (!hasWarranty) {
+                                      selectedWarrantyImageBytes = null;
+                                      selectedWarrantyImageName = null;
+                                      warrantyDescriptionController.clear();
+                                    }
+                                  });
+                                },
+                              ),
                             ),
                             if (hasWarranty) ...[
                               const SizedBox(height: 8),

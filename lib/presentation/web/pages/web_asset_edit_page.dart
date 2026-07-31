@@ -385,20 +385,23 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
                         decoration: _decoration('Description'),
                       ),
                       const SizedBox(height: 18),
-                      SwitchListTile(
-                        value: hasWarranty,
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Warranty'),
-                        activeThumbColor: AppColors.primaryColor,
-                        onChanged: (value) {
-                          setState(() {
-                            hasWarranty = value;
-                            if (!hasWarranty) {
-                              selectedWarrantyImageBytes = null;
-                              selectedWarrantyImageName = null;
-                            }
-                          });
-                        },
+                      Material(
+                        color: Colors.transparent,
+                        child: SwitchListTile(
+                          value: hasWarranty,
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Warranty'),
+                          activeThumbColor: AppColors.primaryColor,
+                          onChanged: (value) {
+                            setState(() {
+                              hasWarranty = value;
+                              if (!hasWarranty) {
+                                selectedWarrantyImageBytes = null;
+                                selectedWarrantyImageName = null;
+                              }
+                            });
+                          },
+                        ),
                       ),
                       if (hasWarranty) ...[
                         const SizedBox(height: 8),
