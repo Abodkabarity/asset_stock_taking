@@ -169,7 +169,7 @@ extension _DisposePageExtension on _WebAssetDashboardPageState {
                             },
                             decoration: InputDecoration(
                               hintText:
-                                  'Search by asset name, tag ID, site or location',
+                                  'Search by asset name, tag ID or location',
                               hintStyle: const TextStyle(
                                 color: Color(0xff8a97aa),
                                 fontSize: 13,

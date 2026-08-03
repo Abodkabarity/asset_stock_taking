@@ -86,7 +86,6 @@ class WebAssetQuickViewDialog extends StatelessWidget {
                         ('Brand', asset.brand),
                         ('Model', asset.model),
                         ('Serial No', asset.serialNo),
-                        ('Site', asset.projectName),
                         ('Location', asset.location),
                         ('Category', asset.category),
                         ('Sub Category', asset.subCategory),

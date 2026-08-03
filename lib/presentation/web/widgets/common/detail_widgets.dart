@@ -149,13 +149,11 @@ class _DateTextField extends StatelessWidget {
 class _TransferInfoBox extends StatelessWidget {
   final String title;
   final String branch;
-  final String project;
   final Color color;
 
   const _TransferInfoBox({
     required this.title,
     required this.branch,
-    required this.project,
     required this.color,
   });
 
@@ -177,11 +175,6 @@ class _TransferInfoBox extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(branch, overflow: TextOverflow.ellipsis),
-          Text(
-            project,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AppColors.subText),
-          ),
         ],
       ),
     );

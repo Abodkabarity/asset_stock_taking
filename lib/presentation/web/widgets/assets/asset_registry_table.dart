@@ -21,7 +21,6 @@ class _AssetRegistryTableHeader extends StatelessWidget {
           Expanded(flex: 2, child: _AssetRegistryHeaderText('Asset Tag ID')),
           Expanded(flex: 3, child: _AssetRegistryHeaderText('Asset Details')),
           Expanded(flex: 2, child: _AssetRegistryHeaderText('Status')),
-          Expanded(flex: 2, child: _AssetRegistryHeaderText('Site')),
           Expanded(flex: 2, child: _AssetRegistryHeaderText('Location')),
           SizedBox(
             width: 188,
@@ -254,37 +253,6 @@ class _AssetRegistryRowState extends State<_AssetRegistryRow> {
                           Expanded(
                             flex: 2,
                             child: _StatusPill(status: asset.status),
-                          ),
-
-                          Expanded(
-                            flex: 2,
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 10),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.business_outlined,
-                                    size: 15,
-                                    color: Color(0xff9ba6b7),
-                                  ),
-                                  const SizedBox(width: 7),
-                                  Expanded(
-                                    child: Text(
-                                      asset.projectName.trim().isEmpty
-                                          ? '-'
-                                          : asset.projectName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: Color(0xff4b596f),
-                                        fontSize: 11.7,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
                           ),
 
                           Expanded(

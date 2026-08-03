@@ -15,226 +15,234 @@ class _MaintenanceHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 178),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xff102b50), Color(0xff174b82), Color(0xff2463a8)],
-          stops: [0, 0.55, 1],
-        ),
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xff174b82).withValues(alpha: 0.24),
-            blurRadius: 34,
-            spreadRadius: -10,
-            offset: const Offset(0, 18),
+    return WebHoverLift(
+      borderRadius: BorderRadius.circular(26),
+      child: Container(
+        width: double.infinity,
+        constraints: const BoxConstraints(minHeight: 178),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xff102b50), Color(0xff174b82), Color(0xff2463a8)],
+            stops: [0, 0.55, 1],
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
-        child: Stack(
-          children: [
-            Positioned(
-              right: -90,
-              top: -130,
-              child: Container(
-                width: 310,
-                height: 310,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.055),
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xff174b82).withValues(alpha: 0.24),
+              blurRadius: 34,
+              spreadRadius: -10,
+              offset: const Offset(0, 18),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(26),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -90,
+                top: -130,
+                child: Container(
+                  width: 310,
+                  height: 310,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.055),
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              right: 155,
-              bottom: -115,
-              child: Container(
-                width: 245,
-                height: 245,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xff59d5e0).withValues(alpha: 0.07),
+              Positioned(
+                right: 155,
+                bottom: -115,
+                child: Container(
+                  width: 245,
+                  height: 245,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xff59d5e0).withValues(alpha: 0.07),
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              right: 45,
-              top: 20,
-              child: Transform.rotate(
-                angle: -0.13,
-                child: Icon(
-                  Icons.settings_suggest_rounded,
-                  size: 142,
-                  color: Colors.white.withValues(alpha: 0.055),
+              Positioned(
+                right: 45,
+                top: 20,
+                child: Transform.rotate(
+                  angle: -0.13,
+                  child: Icon(
+                    Icons.settings_suggest_rounded,
+                    size: 142,
+                    color: Colors.white.withValues(alpha: 0.055),
+                  ),
                 ),
               ),
-            ),
 
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 27),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final compact = constraints.maxWidth < 820;
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 27,
+                ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 820;
 
-                  final information = Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 66,
-                        height: 66,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.13),
-                          borderRadius: BorderRadius.circular(19),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.17),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.12),
-                              blurRadius: 18,
-                              offset: const Offset(0, 9),
+                    final information = Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 66,
+                          height: 66,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.13),
+                            borderRadius: BorderRadius.circular(19),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.17),
                             ),
-                          ],
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.12),
+                                blurRadius: 18,
+                                offset: const Offset(0, 9),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.engineering_rounded,
+                            color: Colors.white,
+                            size: 33,
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.engineering_rounded,
-                          color: Colors.white,
-                          size: 33,
-                        ),
-                      ),
-                      const SizedBox(width: 18),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 8,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                const Text(
-                                  'Maintenance Center',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 27,
-                                    height: 1.15,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.7,
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  const Text(
+                                    'Maintenance Center',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 27,
+                                      height: 1.15,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.7,
+                                    ),
                                   ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 11,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.14),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 11,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
                                       color: Colors.white.withValues(
-                                        alpha: 0.16,
+                                        alpha: 0.14,
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.16,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '$totalAssets assets',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
                                   ),
-                                  child: Text(
-                                    '$totalAssets assets',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 9),
-                            const Text(
-                              'Track service activity, update maintenance details '
-                              'and return assets to operation efficiently.',
-                              style: TextStyle(
-                                color: Color(0xffd9e8f8),
-                                fontSize: 13,
-                                height: 1.5,
-                                fontWeight: FontWeight.w500,
+                                ],
                               ),
-                            ),
-                            const SizedBox(height: 13),
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.location_on_outlined,
-                                  color: Color(0xff9fd8ff),
-                                  size: 17,
+                              const SizedBox(height: 9),
+                              const Text(
+                                'Track service activity, update maintenance details '
+                                'and return assets to operation efficiently.',
+                                style: TextStyle(
+                                  color: Color(0xffd9e8f8),
+                                  fontSize: 13,
+                                  height: 1.5,
+                                  fontWeight: FontWeight.w500,
                                 ),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  child: Text(
-                                    selectedBranch ?? 'All Branches',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Color(0xffd9e8f8),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
+                              ),
+                              const SizedBox(height: 13),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.location_on_outlined,
+                                    color: Color(0xff9fd8ff),
+                                    size: 17,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      selectedBranch ?? 'All Branches',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Color(0xffd9e8f8),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ],
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  );
+                      ],
+                    );
 
-                  final actions = Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    alignment: WrapAlignment.end,
-                    children: [
-                      _MaintenanceHeroButton(
-                        icon: Icons.file_download_outlined,
-                        label: 'Export',
-                        filled: false,
-                        onTap: onExport,
-                      ),
-                      _MaintenanceHeroButton(
-                        icon: Icons.add_rounded,
-                        label: 'Select Assets',
-                        filled: true,
-                        onTap: onSelectAssets,
-                      ),
-                    ],
-                  );
-
-                  if (compact) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    final actions = Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      alignment: WrapAlignment.end,
                       children: [
-                        information,
-                        const SizedBox(height: 24),
+                        _MaintenanceHeroButton(
+                          icon: Icons.file_download_outlined,
+                          label: 'Export',
+                          filled: false,
+                          onTap: onExport,
+                        ),
+                        _MaintenanceHeroButton(
+                          icon: Icons.add_rounded,
+                          label: 'Select Assets',
+                          filled: true,
+                          onTap: onSelectAssets,
+                        ),
+                      ],
+                    );
+
+                    if (compact) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          information,
+                          const SizedBox(height: 24),
+                          actions,
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(child: information),
+                        const SizedBox(width: 24),
                         actions,
                       ],
                     );
-                  }
-
-                  return Row(
-                    children: [
-                      Expanded(child: information),
-                      const SizedBox(width: 24),
-                      actions,
-                    ],
-                  );
-                },
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -342,7 +350,7 @@ class _MaintenanceHeroButtonState extends State<_MaintenanceHeroButton> {
   }
 }
 
-class _MaintenanceStatCard extends StatefulWidget {
+class _MaintenanceStatCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final String title;
@@ -358,148 +366,13 @@ class _MaintenanceStatCard extends StatefulWidget {
   });
 
   @override
-  State<_MaintenanceStatCard> createState() => _MaintenanceStatCardState();
-}
-
-class _MaintenanceStatCardState extends State<_MaintenanceStatCard> {
-  bool hovered = false;
-
-  @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.basic,
-      onEnter: (_) => setState(() => hovered = true),
-      onExit: (_) => setState(() => hovered = false),
-      child: TweenAnimationBuilder<double>(
-        tween: Tween<double>(begin: 0, end: hovered ? 1 : 0),
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutCubic,
-        builder: (context, animationValue, child) {
-          return Transform.translate(
-            offset: Offset(0, -5 * animationValue),
-            child: Container(
-              height: 116,
-              padding: const EdgeInsets.all(17),
-              decoration: BoxDecoration(
-                color: Color.lerp(
-                  Colors.white,
-                  widget.color.withValues(alpha: 0.035),
-                  animationValue,
-                ),
-                borderRadius: BorderRadius.circular(19),
-                border: Border.all(
-                  color: Color.lerp(
-                    const Color(0xffdfe7f2),
-                    widget.color.withValues(alpha: 0.38),
-                    animationValue,
-                  )!,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(
-                      alpha: 0.035 + (0.025 * animationValue),
-                    ),
-                    blurRadius: 18 + (10 * animationValue),
-                    spreadRadius: -7,
-                    offset: Offset(0, 8 + (4 * animationValue)),
-                  ),
-                  BoxShadow(
-                    color: widget.color.withValues(
-                      alpha: 0.09 * animationValue,
-                    ),
-                    blurRadius: 28,
-                    spreadRadius: -12,
-                    offset: const Offset(0, 14),
-                  ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    right: -20,
-                    bottom: -35,
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: widget.color.withValues(
-                          alpha: 0.025 + (animationValue * 0.025),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 260),
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: widget.color.withValues(
-                            alpha: 0.10 + (animationValue * 0.05),
-                          ),
-                          borderRadius: BorderRadius.circular(
-                            16 - (animationValue * 2),
-                          ),
-                        ),
-                        child: Icon(
-                          widget.icon,
-                          color: widget.color,
-                          size: 26 + (animationValue * 2),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Color(0xff75839a),
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 7),
-                            Text(
-                              widget.value,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Color(0xff16243c),
-                                fontSize: 23,
-                                height: 1,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              widget.subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Color(0xff9aa5b5),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+    return WebDashboardMetricCard(
+      icon: icon,
+      color: color,
+      title: title,
+      value: value,
+      subtitle: subtitle,
     );
   }
 }
@@ -550,7 +423,6 @@ class _ModernMaintenanceTableHeader extends StatelessWidget {
             child: _ModernMaintenanceHeaderText('Asset Details'),
           ),
           Expanded(flex: 2, child: _ModernMaintenanceHeaderText('Status')),
-          Expanded(flex: 2, child: _ModernMaintenanceHeaderText('Site')),
           Expanded(flex: 2, child: _ModernMaintenanceHeaderText('Location')),
           SizedBox(
             width: 146,
@@ -785,37 +657,6 @@ class _ModernMaintenanceAssetRowState
                               child: Row(
                                 children: [
                                   const Icon(
-                                    Icons.business_outlined,
-                                    size: 16,
-                                    color: Color(0xff9aa6b7),
-                                  ),
-                                  const SizedBox(width: 7),
-                                  Expanded(
-                                    child: Text(
-                                      asset.projectName.trim().isEmpty
-                                          ? '-'
-                                          : asset.projectName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: Color(0xff46546b),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-
-                          Expanded(
-                            flex: 2,
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 10),
-                              child: Row(
-                                children: [
-                                  const Icon(
                                     Icons.location_on_outlined,
                                     size: 16,
                                     color: Color(0xff9aa6b7),
@@ -1010,7 +851,7 @@ class _MaintenanceEmptyState extends StatelessWidget {
               const SizedBox(height: 7),
               Text(
                 hasSearch
-                    ? 'Try another asset name, tag ID, site or location.'
+                    ? 'Try another asset name, tag ID or location.'
                     : 'Select an asset to create its first maintenance record.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(

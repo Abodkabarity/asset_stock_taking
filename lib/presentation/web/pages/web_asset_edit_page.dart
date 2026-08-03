@@ -290,24 +290,24 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
                                     decoration: _decoration('Status'),
                                     items: const [
                                       DropdownMenuItem(
-                                        value: 'New',
-                                        child: Text('New'),
+                                        value: 'Bad',
+                                        child: Text('Bad'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'Disposed',
+                                        child: Text('Disposed'),
                                       ),
                                       DropdownMenuItem(
                                         value: 'Good',
                                         child: Text('Good'),
                                       ),
                                       DropdownMenuItem(
-                                        value: 'Bad',
-                                        child: Text('Bad'),
-                                      ),
-                                      DropdownMenuItem(
                                         value: 'Maintenance',
                                         child: Text('Maintenance'),
                                       ),
                                       DropdownMenuItem(
-                                        value: 'Disposed',
-                                        child: Text('Disposed'),
+                                        value: 'New',
+                                        child: Text('New'),
                                       ),
                                     ],
                                     onChanged: (value) {
@@ -325,7 +325,7 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
                       ),
                       const Divider(height: 36),
                       const Text(
-                        'Site, Location, Category and Department',
+                        'Location, Category and Department',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 18),
@@ -335,11 +335,6 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
                           Expanded(
                             child: Column(
                               children: [
-                                _Field(
-                                  label: 'Site',
-                                  value: widget.asset.projectName,
-                                  readOnly: true,
-                                ),
                                 _Field(
                                   label: 'Location',
                                   value: widget.asset.location,

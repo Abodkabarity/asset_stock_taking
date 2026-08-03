@@ -55,7 +55,7 @@ class _ListToolbar extends StatelessWidget {
                   value: '__all__',
                   child: Text('All Statuses'),
                 ),
-                ...statuses.map(
+                ...alphabetizedWebOptions(statuses).map(
                   (status) => DropdownMenuItem(
                     value: status,
                     child: Row(

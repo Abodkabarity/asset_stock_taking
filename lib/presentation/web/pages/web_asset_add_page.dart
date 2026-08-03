@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../data/models/asset_item_model.dart';
 import '../data/web_asset_repository.dart';
+import '../utils/web_dropdown_options.dart';
 import '../widgets/web_asset_shell.dart';
 import '../widgets/web_hover_surface.dart';
 
@@ -44,10 +45,8 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
 
   List<AssetItemModel> masterItems = [];
   List<String> branches = [];
-  List<String> projects = [];
   AssetItemModel? selectedItem;
   String? branch;
-  String? project;
   String status = 'New';
   bool hasWarranty = false;
   bool loading = true;
@@ -81,24 +80,24 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
   Future<void> _load() async {
     final loadedBranches = await repository.getBranches();
     final loadedItems = await repository.getMasterItems();
-    final nextBranch =
-        widget.initialBranch ??
-        (loadedBranches.isEmpty ? null : loadedBranches.first);
-    final loadedProjects = nextBranch == null
-        ? <String>[]
-        : await repository.getProjects(nextBranch);
+    final sortedBranches = alphabetizedWebOptions([
+      'Asset Store',
+      ...loadedBranches,
+    ]);
+    final nextBranch = preferredAssetStore(sortedBranches);
 
     if (!mounted) return;
 
     setState(() {
-      branches = loadedBranches;
-      masterItems = loadedItems.where((item) {
-        final type = item.assetInventory.trim().toLowerCase();
-        return type == (widget.inventoryMode ? 'inventory' : 'asset');
-      }).toList();
+      branches = sortedBranches;
+      masterItems =
+          loadedItems.where((item) {
+            final type = item.assetInventory.trim().toLowerCase();
+            return type == (widget.inventoryMode ? 'inventory' : 'asset');
+          }).toList()..sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
       branch = nextBranch;
-      projects = loadedProjects;
-      project = loadedProjects.isEmpty ? null : loadedProjects.first;
       purchaseDateController.text = _date(DateTime.now());
       loading = false;
     });
@@ -146,13 +145,9 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
   Future<void> _save() async {
     final item = selectedItem;
     final targetBranch = branch;
-    final targetProject = project;
     final tag = tagController.text.trim();
 
-    if (item == null ||
-        targetBranch == null ||
-        targetProject == null ||
-        tag.isEmpty) {
+    if (item == null || targetBranch == null || tag.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please complete required fields')),
       );
@@ -201,7 +196,7 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
       'asset_classification': item.assetClassification,
       'asset_inventory': item.assetInventory,
       'location': targetBranch,
-      'project_name': targetProject,
+      'project_name': '',
       'status': status,
       'brand': brandController.text,
       'model': modelController.text,
@@ -404,16 +399,16 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
                                         decoration: _decoration('Status'),
                                         items: const [
                                           DropdownMenuItem(
-                                            value: 'New',
-                                            child: Text('New'),
+                                            value: 'Bad',
+                                            child: Text('Bad'),
                                           ),
                                           DropdownMenuItem(
                                             value: 'Good',
                                             child: Text('Good'),
                                           ),
                                           DropdownMenuItem(
-                                            value: 'Bad',
-                                            child: Text('Bad'),
+                                            value: 'New',
+                                            child: Text('New'),
                                           ),
                                         ],
                                         onChanged: (value) {
@@ -431,7 +426,7 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
 
                             const Divider(height: 38),
                             const Text(
-                              'Site, Location, Category and Department',
+                              'Location, Category and Department',
                               style: TextStyle(fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 18),
@@ -442,32 +437,13 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
                                   child: Column(
                                     children: [
                                       _DropdownField(
-                                        label: 'Site',
-                                        value: project,
-                                        items: projects,
-                                        onChanged: (value) {
-                                          setState(() {
-                                            project = value;
-                                          });
-                                        },
-                                      ),
-                                      _DropdownField(
                                         label: 'Location',
                                         value: branch,
                                         items: branches,
-                                        onChanged: (value) async {
+                                        onChanged: (value) {
                                           if (value == null) return;
-                                          final loadedProjects =
-                                              await repository.getProjects(
-                                                value,
-                                              );
-                                          if (!mounted) return;
                                           setState(() {
                                             branch = value;
-                                            projects = loadedProjects;
-                                            project = loadedProjects.isEmpty
-                                                ? null
-                                                : loadedProjects.first;
                                           });
                                         },
                                       ),
@@ -661,13 +637,14 @@ class _DropdownField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sortedItems = alphabetizedWebOptions(items);
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: DropdownButtonFormField<String>(
         initialValue: value,
         isExpanded: true,
         decoration: _decoration(label),
-        items: items.map((item) {
+        items: sortedItems.map((item) {
           return DropdownMenuItem(value: item, child: Text(item));
         }).toList(),
         onChanged: onChanged,

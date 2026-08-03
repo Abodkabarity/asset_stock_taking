@@ -34,8 +34,7 @@ class _AssetRegistryToolbar extends StatelessWidget {
         controller: searchController,
         onChanged: onSearchChanged,
         decoration: InputDecoration(
-          hintText:
-              'Search asset name, tag ID, category, brand, site or location',
+          hintText: 'Search asset name, tag ID, category, brand or location',
           hintStyle: const TextStyle(
             color: Color(0xff909caf),
             fontSize: 12.5,
@@ -103,7 +102,7 @@ class _AssetRegistryToolbar extends StatelessWidget {
               ),
             ),
           ),
-          ...statuses.map((status) {
+          ...alphabetizedWebOptions(statuses).map((status) {
             return DropdownMenuItem<String>(
               value: status,
               child: Row(

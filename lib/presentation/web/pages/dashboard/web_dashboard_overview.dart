@@ -291,7 +291,6 @@ extension _DashboardOverviewExtension on _WebAssetDashboardPageState {
                                               'Serial No',
                                               asset.serialNo,
                                             ),
-                                            _InfoRow('Site', asset.projectName),
                                             _InfoRow(
                                               'Location',
                                               asset.location,

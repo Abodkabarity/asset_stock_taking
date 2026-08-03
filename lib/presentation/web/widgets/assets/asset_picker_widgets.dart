@@ -52,8 +52,7 @@ class _MultiAssetSearchDialogState extends State<_MultiAssetSearchDialog> {
               asset.category.toLowerCase().contains(query) ||
               asset.subCategory.toLowerCase().contains(query) ||
               asset.brand.toLowerCase().contains(query) ||
-              asset.location.toLowerCase().contains(query) ||
-              asset.projectName.toLowerCase().contains(query);
+              asset.location.toLowerCase().contains(query);
           return matchesBranch && matchesSearch;
         })
         .toList(growable: false);
@@ -120,7 +119,7 @@ class _MultiAssetSearchDialogState extends State<_MultiAssetSearchDialog> {
                     autofocus: true,
                     onChanged: (value) => setState(() => search = value),
                     decoration: InputDecoration(
-                      hintText: 'Search by asset, tag ID, site or location...',
+                      hintText: 'Search by asset, tag ID or location...',
                       prefixIcon: const Icon(Icons.search),
                       suffixIcon: search.isEmpty
                           ? null
@@ -150,7 +149,7 @@ class _MultiAssetSearchDialogState extends State<_MultiAssetSearchDialog> {
                         value: null,
                         child: Text('All Locations'),
                       ),
-                      ...widget.branches.map(
+                      ...alphabetizedWebOptions(widget.branches).map(
                         (branch) => DropdownMenuItem<String>(
                           value: branch,
                           child: Text(branch, overflow: TextOverflow.ellipsis),
@@ -276,13 +275,6 @@ class _MultiAssetSearchDialogState extends State<_MultiAssetSearchDialog> {
                                               value: asset.location,
                                             ),
                                           ),
-                                          Expanded(
-                                            child: _SearchResultInfo(
-                                              icon: Icons.business_outlined,
-                                              label: 'Site',
-                                              value: asset.projectName,
-                                            ),
-                                          ),
                                           _StatusPill(status: asset.status),
                                         ],
                                       ),
@@ -345,7 +337,7 @@ class _AssetSearchPrompt extends StatelessWidget {
           ),
           SizedBox(height: 5),
           Text(
-            'Suggestions will appear with their location and site',
+            'Suggestions will appear with their location',
             style: TextStyle(color: AppColors.subText),
           ),
         ],

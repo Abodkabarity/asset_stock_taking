@@ -30,7 +30,7 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final branchValue = selectedBranch ?? '__all__';
-    final branchItems = ['__all__', ...branches];
+    final branchItems = ['__all__', ...alphabetizedWebOptions(branches)];
     final compactActions = MediaQuery.sizeOf(context).width < 1500;
 
     return Container(

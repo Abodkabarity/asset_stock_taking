@@ -6,6 +6,7 @@ import '../../../core/services/barcode_print_service.dart';
 import '../../../core/utils/asset_classification_utils.dart';
 import '../../../data/models/asset_stock_model.dart';
 import '../data/web_asset_repository.dart';
+import '../utils/web_dropdown_options.dart';
 import '../utils/web_page_route.dart';
 import '../widgets/web_asset_image.dart';
 import '../widgets/web_asset_info_table.dart';
@@ -235,7 +236,6 @@ class _TopCard extends StatelessWidget {
   Widget _secondaryInfo() {
     return WebAssetInfoTable(
       rows: [
-        ('Site', asset.projectName),
         ('Location', asset.location),
         ('Category', asset.category),
         ('Sub Category', asset.subCategory),
@@ -279,9 +279,9 @@ class _MoreActionsButton extends StatelessWidget {
         }
       },
       itemBuilder: (context) => const [
-        PopupMenuItem(value: 'move', child: Text('Move / Transfer')),
-        PopupMenuItem(value: 'maintenance', child: Text('Maintenance')),
         PopupMenuItem(value: 'dispose', child: Text('Dispose')),
+        PopupMenuItem(value: 'maintenance', child: Text('Maintenance')),
+        PopupMenuItem(value: 'move', child: Text('Move / Transfer')),
         PopupMenuItem(value: 'reserve', child: Text('Reserve')),
       ],
       child: Container(
@@ -323,7 +323,7 @@ class _MoreActionsButton extends StatelessWidget {
     AssetStockModel asset,
   ) async {
     final repository = WebAssetRepository();
-    final branches = await repository.getBranches();
+    final branches = alphabetizedWebOptions(await repository.getBranches());
     if (!context.mounted) return;
 
     String branch = branches.contains(asset.location)
@@ -357,7 +357,6 @@ class _MoreActionsButton extends StatelessWidget {
                           child: _TransferBox(
                             title: 'From',
                             branch: asset.location,
-                            project: asset.projectName,
                           ),
                         ),
                         const Padding(
@@ -365,11 +364,7 @@ class _MoreActionsButton extends StatelessWidget {
                           child: Icon(Icons.arrow_forward),
                         ),
                         Expanded(
-                          child: _TransferBox(
-                            title: 'To',
-                            branch: branch,
-                            project: branch,
-                          ),
+                          child: _TransferBox(title: 'To', branch: branch),
                         ),
                       ],
                     ),
@@ -380,7 +375,7 @@ class _MoreActionsButton extends StatelessWidget {
                         labelText: 'To Branch',
                         border: OutlineInputBorder(),
                       ),
-                      items: branches.map((item) {
+                      items: alphabetizedWebOptions(branches).map((item) {
                         return DropdownMenuItem(value: item, child: Text(item));
                       }).toList(),
                       onChanged: (value) async {
@@ -415,18 +410,14 @@ class _MoreActionsButton extends StatelessWidget {
 
     if (result != true) return;
 
-    await repository.transferAsset(
-      itemCode: asset.itemCode,
-      branch: branch,
-      project: branch,
-    );
+    await repository.transferAsset(itemCode: asset.itemCode, branch: branch);
     await repository.addActivityLog(
       itemCode: asset.itemCode,
       action: 'transfer',
       description: 'Transferred from ${asset.location} to $branch',
       fromBranch: asset.location,
       toBranch: branch,
-      metadata: {'previous_project': asset.projectName},
+      metadata: const {},
     );
 
     if (!context.mounted) return;
@@ -439,13 +430,8 @@ class _MoreActionsButton extends StatelessWidget {
 class _TransferBox extends StatelessWidget {
   final String title;
   final String branch;
-  final String project;
 
-  const _TransferBox({
-    required this.title,
-    required this.branch,
-    required this.project,
-  });
+  const _TransferBox({required this.title, required this.branch});
 
   @override
   Widget build(BuildContext context) {
@@ -461,8 +447,6 @@ class _TransferBox extends StatelessWidget {
           Text(title, style: const TextStyle(color: AppColors.subText)),
           const SizedBox(height: 6),
           Text(branch, style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 3),
-          Text(project),
         ],
       ),
     );
@@ -622,7 +606,6 @@ class _DetailsTab extends StatelessWidget {
                 rows: [
                   ('Date Created', _dateTime(asset.createdAt)),
                   ('Current Branch', asset.location),
-                  ('Current Project', asset.projectName),
                   ('Status', asset.status),
                 ],
               ),
@@ -735,7 +718,7 @@ class _HistoryTab extends StatelessWidget {
       _HistoryEvent(
         title: 'Asset Created',
         date: _dateTime(asset.createdAt),
-        details: '${asset.location} / ${asset.projectName}',
+        details: asset.location,
       ),
       _HistoryEvent(
         title: 'Current Status',
@@ -745,7 +728,7 @@ class _HistoryTab extends StatelessWidget {
       _HistoryEvent(
         title: 'Current Location',
         date: _dateTime(asset.createdAt),
-        details: '${asset.location} / ${asset.projectName}',
+        details: asset.location,
       ),
     ];
 

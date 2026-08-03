@@ -23,19 +23,6 @@ class WebAssetRepository {
         .toList();
   }
 
-  Future<List<String>> getProjects(String branch) async {
-    final response = await supabase
-        .from('projects')
-        .select('project_name')
-        .eq('branch_name', branch)
-        .order('project_name');
-
-    return response
-        .map<String>((e) => e['project_name']?.toString() ?? '')
-        .where((e) => e.isNotEmpty)
-        .toList();
-  }
-
   Future<List<AssetStockModel>> getAssets() async {
     final response = await supabase
         .from('asset_stock_taking')
@@ -87,11 +74,10 @@ class WebAssetRepository {
   Future<void> transferAsset({
     required String itemCode,
     required String branch,
-    String? project,
   }) async {
     await supabase
         .from('asset_stock_taking')
-        .update({'location': branch, 'project_name': project ?? branch})
+        .update({'location': branch, 'project_name': ''})
         .eq('item_code', itemCode);
   }
 
@@ -156,8 +142,15 @@ class WebAssetRepository {
       'cost': cost,
       'repeating': repeating,
       'branch': asset.location,
-      'project_name': asset.projectName,
+      'project_name': '',
     });
+  }
+
+  Future<void> updateMaintenanceRecord({
+    required Object recordId,
+    required Map<String, dynamic> values,
+  }) async {
+    await supabase.from('asset_maintenance').update(values).eq('id', recordId);
   }
 
   Future<List<Map<String, dynamic>>> getMaintenanceAlertsWithinDays({

@@ -11,6 +11,7 @@ import '../web/pages/web_asset_add_page.dart';
 import '../web/pages/web_asset_edit_page.dart';
 import '../web/pages/web_asset_view_page.dart';
 import '../web/utils/web_asset_colors.dart';
+import '../web/utils/web_dropdown_options.dart';
 import '../web/widgets/web_asset_quick_view_dialog.dart';
 import '../web/widgets/web_hover_surface.dart';
 
@@ -73,6 +74,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
 
   final webRepository = WebAssetRepository();
   final searchController = TextEditingController();
+  final alertSearchController = TextEditingController();
   final contentScrollController = ScrollController();
   final maintenanceTitleController = TextEditingController();
   final maintenanceDetailsController = TextEditingController();
@@ -92,6 +94,8 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   String? selectedBranch;
   String searchQuery = '';
   String? selectedStatus;
+  String alertSearchQuery = '';
+  String alertUrgencyFilter = 'All';
   DateTime alertMonth = DateTime(DateTime.now().year, DateTime.now().month);
   AssetStockModel? selectedMaintenanceAsset;
   AssetStockModel? selectedDetailAsset;
@@ -118,6 +122,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   @override
   void dispose() {
     searchController.dispose();
+    alertSearchController.dispose();
     contentScrollController.dispose();
     maintenanceTitleController.dispose();
     maintenanceDetailsController.dispose();
@@ -293,7 +298,6 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
         asset.brand.toLowerCase().contains(search) ||
         asset.status.toLowerCase().contains(search) ||
         asset.location.toLowerCase().contains(search) ||
-        asset.projectName.toLowerCase().contains(search) ||
         asset.assetInventory.toLowerCase().contains(search);
   }
 
@@ -369,7 +373,11 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       );
       return;
     }
-    await AssetExcelService.exportAssets(assets: items, fileName: fileName);
+    await AssetExcelService.exportAssets(
+      assets: items,
+      fileName: fileName,
+      includeProject: false,
+    );
   }
 
   Future<void> _printAssets() async {
@@ -980,7 +988,6 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                           child: _TransferInfoBox(
                             title: 'From',
                             branch: asset.location,
-                            project: asset.projectName,
                             color: Colors.grey.shade700,
                           ),
                         ),
@@ -992,7 +999,6 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                           child: _TransferInfoBox(
                             title: 'To',
                             branch: branch,
-                            project: branch,
                             color: AppColors.primaryColor,
                           ),
                         ),
@@ -1002,7 +1008,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                     DropdownButtonFormField<String>(
                       initialValue: branch,
                       decoration: _inputDecoration('Branch'),
-                      items: branches.map((item) {
+                      items: alphabetizedWebOptions(branches).map((item) {
                         return DropdownMenuItem(value: item, child: Text(item));
                       }).toList(),
                       onChanged: (value) async {
@@ -1041,18 +1047,14 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
 
     if (result != true) return;
 
-    await webRepository.transferAsset(
-      itemCode: asset.itemCode,
-      branch: branch,
-      project: branch,
-    );
+    await webRepository.transferAsset(itemCode: asset.itemCode, branch: branch);
     await webRepository.addActivityLog(
       itemCode: asset.itemCode,
       action: 'transfer',
       description: 'Transferred from ${asset.location} to $branch',
       fromBranch: asset.location,
       toBranch: branch,
-      metadata: {'previous_project': asset.projectName},
+      metadata: const {},
     );
 
     await _loadData();
@@ -1253,10 +1255,6 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                                   value: asset.status,
                                 ),
                                 _DialogInfo(
-                                  label: 'Site',
-                                  value: asset.projectName,
-                                ),
-                                _DialogInfo(
                                   label: 'Location',
                                   value: asset.location,
                                 ),
@@ -1401,9 +1399,21 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     StateSetter setDialogState,
   ) async {
     final now = DateTime.now();
+    var initialDate = DateTime.tryParse(controller.text);
+    if (initialDate == null) {
+      final parts = controller.text.trim().split('/');
+      if (parts.length == 3) {
+        final day = int.tryParse(parts[0]);
+        final month = int.tryParse(parts[1]);
+        final year = int.tryParse(parts[2]);
+        if (day != null && month != null && year != null) {
+          initialDate = DateTime(year, month, day);
+        }
+      }
+    }
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.tryParse(controller.text) ?? now,
+      initialDate: initialDate ?? now,
       firstDate: DateTime(2020),
       lastDate: DateTime(now.year + 20),
       builder: (context, child) {
@@ -1640,7 +1650,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
         return _operationPanel(
           title: 'Transfer / Move',
           icon: Icons.open_with,
-          description: 'Move an asset from one branch or project to another.',
+          description: 'Move an asset from one location to another.',
           actionLabel: 'Transfer',
           actionIcon: Icons.swap_horiz,
           onAction: _transferAsset,
@@ -1763,10 +1773,6 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                                   value: asset.status,
                                 ),
                                 _DialogInfo(
-                                  label: 'Site',
-                                  value: asset.projectName,
-                                ),
-                                _DialogInfo(
                                   label: 'Location',
                                   value: asset.location,
                                 ),
@@ -1830,16 +1836,16 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                                 ),
                                 items: const [
                                   DropdownMenuItem(
-                                    value: 'Open',
-                                    child: Text('Open'),
+                                    value: 'Completed',
+                                    child: Text('Completed'),
                                   ),
                                   DropdownMenuItem(
                                     value: 'In Progress',
                                     child: Text('In Progress'),
                                   ),
                                   DropdownMenuItem(
-                                    value: 'Completed',
-                                    child: Text('Completed'),
+                                    value: 'Open',
+                                    child: Text('Open'),
                                   ),
                                 ],
                                 onChanged: (value) {

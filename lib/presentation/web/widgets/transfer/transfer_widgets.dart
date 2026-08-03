@@ -15,219 +15,227 @@ class _TransferHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 178),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xff102b50), Color(0xff174b82), Color(0xff2463a8)],
-          stops: [0, 0.55, 1],
-        ),
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xff174b82).withValues(alpha: 0.24),
-            blurRadius: 34,
-            spreadRadius: -10,
-            offset: const Offset(0, 18),
+    return WebHoverLift(
+      borderRadius: BorderRadius.circular(26),
+      child: Container(
+        width: double.infinity,
+        constraints: const BoxConstraints(minHeight: 178),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xff102b50), Color(0xff174b82), Color(0xff2463a8)],
+            stops: [0, 0.55, 1],
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
-        child: Stack(
-          children: [
-            Positioned(
-              right: -90,
-              top: -130,
-              child: Container(
-                width: 310,
-                height: 310,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.055),
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xff174b82).withValues(alpha: 0.24),
+              blurRadius: 34,
+              spreadRadius: -10,
+              offset: const Offset(0, 18),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(26),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -90,
+                top: -130,
+                child: Container(
+                  width: 310,
+                  height: 310,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.055),
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              right: 155,
-              bottom: -115,
-              child: Container(
-                width: 245,
-                height: 245,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xff59d5e0).withValues(alpha: 0.07),
+              Positioned(
+                right: 155,
+                bottom: -115,
+                child: Container(
+                  width: 245,
+                  height: 245,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xff59d5e0).withValues(alpha: 0.07),
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              right: 42,
-              top: 20,
-              child: Transform.rotate(
-                angle: -0.13,
-                child: Icon(
-                  Icons.swap_horiz_rounded,
-                  size: 142,
-                  color: Colors.white.withValues(alpha: 0.055),
+              Positioned(
+                right: 42,
+                top: 20,
+                child: Transform.rotate(
+                  angle: -0.13,
+                  child: Icon(
+                    Icons.swap_horiz_rounded,
+                    size: 142,
+                    color: Colors.white.withValues(alpha: 0.055),
+                  ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 27),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final compact = constraints.maxWidth < 820;
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 27,
+                ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 820;
 
-                  final information = Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 66,
-                        height: 66,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.13),
-                          borderRadius: BorderRadius.circular(19),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.17),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.12),
-                              blurRadius: 18,
-                              offset: const Offset(0, 9),
+                    final information = Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 66,
+                          height: 66,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.13),
+                            borderRadius: BorderRadius.circular(19),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.17),
                             ),
-                          ],
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.12),
+                                blurRadius: 18,
+                                offset: const Offset(0, 9),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.compare_arrows_rounded,
+                            color: Colors.white,
+                            size: 33,
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.compare_arrows_rounded,
-                          color: Colors.white,
-                          size: 33,
-                        ),
-                      ),
-                      const SizedBox(width: 18),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 8,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                Text(
-                                  title,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 27,
-                                    height: 1.15,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.7,
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 27,
+                                      height: 1.15,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.7,
+                                    ),
                                   ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 11,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.14),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 11,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
                                       color: Colors.white.withValues(
-                                        alpha: 0.16,
+                                        alpha: 0.14,
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.16,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '$totalAssets assets',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
                                       ),
                                     ),
                                   ),
-                                  child: Text(
-                                    '$totalAssets assets',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 9),
-                            const Text(
-                              'Move assets between branches and sites with a clear, '
-                              'organized transfer workflow and better visibility.',
-                              style: TextStyle(
-                                color: Color(0xffd9e8f8),
-                                fontSize: 13,
-                                height: 1.5,
-                                fontWeight: FontWeight.w500,
+                                ],
                               ),
-                            ),
-                            const SizedBox(height: 13),
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.location_on_outlined,
-                                  color: Color(0xff9fd8ff),
-                                  size: 17,
+                              const SizedBox(height: 9),
+                              const Text(
+                                'Move assets between branches and sites with a clear, '
+                                'organized transfer workflow and better visibility.',
+                                style: TextStyle(
+                                  color: Color(0xffd9e8f8),
+                                  fontSize: 13,
+                                  height: 1.5,
+                                  fontWeight: FontWeight.w500,
                                 ),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  child: Text(
-                                    selectedBranch ?? 'All Branches',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Color(0xffd9e8f8),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
+                              ),
+                              const SizedBox(height: 13),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.location_on_outlined,
+                                    color: Color(0xff9fd8ff),
+                                    size: 17,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      selectedBranch ?? 'All Branches',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Color(0xffd9e8f8),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ],
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  );
+                      ],
+                    );
 
-                  final actions = Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    alignment: WrapAlignment.end,
-                    children: [
-                      _MaintenanceHeroButton(
-                        icon: Icons.file_download_outlined,
-                        label: 'Export',
-                        filled: false,
-                        onTap: onExport,
-                      ),
-                    ],
-                  );
-
-                  if (compact) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    final actions = Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      alignment: WrapAlignment.end,
                       children: [
-                        information,
-                        const SizedBox(height: 24),
+                        _MaintenanceHeroButton(
+                          icon: Icons.file_download_outlined,
+                          label: 'Export',
+                          filled: false,
+                          onTap: onExport,
+                        ),
+                      ],
+                    );
+
+                    if (compact) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          information,
+                          const SizedBox(height: 24),
+                          actions,
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(child: information),
+                        const SizedBox(width: 24),
                         actions,
                       ],
                     );
-                  }
-
-                  return Row(
-                    children: [
-                      Expanded(child: information),
-                      const SizedBox(width: 24),
-                      actions,
-                    ],
-                  );
-                },
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -282,7 +290,6 @@ class _ModernTransferTableHeader extends StatelessWidget {
             child: _ModernTransferHeaderText('Asset Details'),
           ),
           const Expanded(flex: 2, child: _ModernTransferHeaderText('Status')),
-          const Expanded(flex: 2, child: _ModernTransferHeaderText('Site')),
           const Expanded(flex: 2, child: _ModernTransferHeaderText('Location')),
           SizedBox(
             width: 146,
@@ -515,36 +522,6 @@ class _ModernTransferAssetRowState extends State<_ModernTransferAssetRow> {
                               child: Row(
                                 children: [
                                   const Icon(
-                                    Icons.business_outlined,
-                                    size: 16,
-                                    color: Color(0xff9aa6b7),
-                                  ),
-                                  const SizedBox(width: 7),
-                                  Expanded(
-                                    child: Text(
-                                      asset.projectName.trim().isEmpty
-                                          ? '-'
-                                          : asset.projectName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: Color(0xff46546b),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 10),
-                              child: Row(
-                                children: [
-                                  const Icon(
                                     Icons.location_on_outlined,
                                     size: 16,
                                     color: Color(0xff9aa6b7),
@@ -742,7 +719,7 @@ class _TransferEmptyState extends StatelessWidget {
               const SizedBox(height: 7),
               Text(
                 hasSearch
-                    ? 'Try another asset name, tag ID, site or location.'
+                    ? 'Try another asset name, tag ID or location.'
                     : 'Assets will appear here once they are available to move between locations.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(

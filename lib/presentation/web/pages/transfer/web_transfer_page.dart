@@ -27,11 +27,10 @@ extension _TransferPageExtension on _WebAssetDashboardPageState {
         .toSet()
         .length;
 
-    final sitesCount = filteredAssets
-        .map((asset) => asset.projectName.trim())
-        .where((site) => site.isNotEmpty)
-        .toSet()
-        .length;
+    final assetValue = filteredAssets.fold<double>(
+      0,
+      (total, asset) => total + asset.cost,
+    );
 
     final categoriesCount = filteredAssets
         .map((asset) => asset.category.trim())
@@ -110,11 +109,11 @@ extension _TransferPageExtension on _WebAssetDashboardPageState {
                   SizedBox(
                     width: cardWidth,
                     child: _MaintenanceStatCard(
-                      icon: Icons.business_outlined,
+                      icon: Icons.payments_outlined,
                       color: const Color(0xfff59f00),
-                      title: 'Sites Covered',
-                      value: sitesCount.toString(),
-                      subtitle: 'Distinct sites in current list',
+                      title: 'Asset Value',
+                      value: assetValue.toStringAsFixed(2),
+                      subtitle: 'Total value in AED',
                     ),
                   ),
                   SizedBox(
@@ -176,7 +175,7 @@ extension _TransferPageExtension on _WebAssetDashboardPageState {
                             },
                             decoration: InputDecoration(
                               hintText:
-                                  'Search by asset name, tag ID, site or location',
+                                  'Search by asset name, tag ID or location',
                               hintStyle: const TextStyle(
                                 color: Color(0xff8a97aa),
                                 fontSize: 13,

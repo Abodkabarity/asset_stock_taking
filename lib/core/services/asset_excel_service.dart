@@ -11,6 +11,7 @@ class AssetExcelService {
   /// =========================
   static Future<Uint8List> buildExcelBytes({
     required List<AssetStockModel> assets,
+    bool includeProject = true,
   }) async {
     final excel = Excel.createExcel();
 
@@ -38,7 +39,7 @@ class AssetExcelService {
       TextCellValue('warranty_image_url'),
       TextCellValue('cost'),
       TextCellValue('created_at'),
-      TextCellValue('project_name'),
+      if (includeProject) TextCellValue('project_name'),
       TextCellValue('image_url'),
     ]);
 
@@ -67,7 +68,7 @@ class AssetExcelService {
         ),
         TextCellValue(item.cost.toString()),
         TextCellValue(item.createdAt.toString()),
-        TextCellValue(item.projectName),
+        if (includeProject) TextCellValue(item.projectName),
         FormulaCellValue('HYPERLINK("${item.imagePath ?? ''}", "Open Image")'),
       ]);
     }
@@ -99,10 +100,14 @@ class AssetExcelService {
   static Future<void> exportAssets({
     required List<AssetStockModel> assets,
     required String fileName,
+    bool includeProject = true,
   }) async {
     try {
       /// BUILD EXCEL
-      final bytes = await buildExcelBytes(assets: assets);
+      final bytes = await buildExcelBytes(
+        assets: assets,
+        includeProject: includeProject,
+      );
 
       /// PICK SAVE LOCATION
       String? outputPath = await FilePicker.saveFile(

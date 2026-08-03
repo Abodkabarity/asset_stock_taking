@@ -16,7 +16,6 @@ class _AssetTableHeader extends StatelessWidget {
           const Expanded(flex: 2, child: _TableHeaderText('Asset Tag ID')),
           const Expanded(flex: 3, child: _TableHeaderText('Description')),
           const Expanded(flex: 2, child: _TableHeaderText('Status')),
-          const Expanded(flex: 2, child: _TableHeaderText('Site')),
           const Expanded(flex: 2, child: _TableHeaderText('Location')),
           SizedBox(
             width: 138,
@@ -119,14 +118,6 @@ class _AssetTableRow extends StatelessWidget {
               ),
             ),
             Expanded(flex: 2, child: _StatusPill(status: asset.status)),
-            Expanded(
-              flex: 2,
-              child: Text(
-                asset.projectName,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13.5),
-              ),
-            ),
             Expanded(
               flex: 2,
               child: Text(
