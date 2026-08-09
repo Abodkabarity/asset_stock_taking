@@ -5,12 +5,18 @@ class _AssetRegistryHeader extends StatelessWidget {
   final String? selectedBranch;
   final VoidCallback onAddAsset;
   final VoidCallback onExport;
+  final DateTimeRange? selectedDateRange;
+  final VoidCallback onPickDateRange;
+  final bool inventoryMode;
 
   const _AssetRegistryHeader({
     required this.totalAssets,
     required this.selectedBranch,
     required this.onAddAsset,
     required this.onExport,
+    required this.selectedDateRange,
+    required this.onPickDateRange,
+    this.inventoryMode = false,
   });
 
   @override
@@ -128,9 +134,11 @@ class _AssetRegistryHeader extends StatelessWidget {
                                 runSpacing: 7,
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
-                                  const Text(
-                                    'Asset Registry',
-                                    style: TextStyle(
+                                  Text(
+                                    inventoryMode
+                                        ? 'Inventory Registry'
+                                        : 'Asset Registry',
+                                    style: const TextStyle(
                                       color: Color(0xff17243b),
                                       fontSize: 25,
                                       height: 1.1,
@@ -151,7 +159,7 @@ class _AssetRegistryHeader extends StatelessWidget {
                                       ),
                                     ),
                                     child: Text(
-                                      '$totalAssets assets',
+                                      '$totalAssets ${inventoryMode ? 'items' : 'assets'}',
                                       style: const TextStyle(
                                         color: Color(0xff3156c8),
                                         fontSize: 10.5,
@@ -162,10 +170,11 @@ class _AssetRegistryHeader extends StatelessWidget {
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              const Text(
-                                'A central workspace for searching, reviewing '
-                                'and managing active company assets.',
-                                style: TextStyle(
+                              Text(
+                                inventoryMode
+                                    ? 'A central workspace for searching, reviewing and managing company inventory.'
+                                    : 'A central workspace for searching, reviewing and managing active company assets.',
+                                style: const TextStyle(
                                   color: Color(0xff75839a),
                                   fontSize: 12.5,
                                   height: 1.45,
@@ -207,6 +216,14 @@ class _AssetRegistryHeader extends StatelessWidget {
                       alignment: WrapAlignment.end,
                       children: [
                         _AssetRegistryHeaderButton(
+                          icon: Icons.date_range_outlined,
+                          label: selectedDateRange == null
+                              ? 'Date range'
+                              : '${_headerDate(selectedDateRange!.start)} - ${_headerDate(selectedDateRange!.end)}',
+                          filled: false,
+                          onTap: onPickDateRange,
+                        ),
+                        _AssetRegistryHeaderButton(
                           icon: Icons.file_download_outlined,
                           label: 'Export',
                           filled: false,
@@ -214,7 +231,7 @@ class _AssetRegistryHeader extends StatelessWidget {
                         ),
                         _AssetRegistryHeaderButton(
                           icon: Icons.add_rounded,
-                          label: 'Add Asset',
+                          label: inventoryMode ? 'Add Inventory' : 'Add Asset',
                           filled: true,
                           onTap: onAddAsset,
                         ),
@@ -248,6 +265,9 @@ class _AssetRegistryHeader extends StatelessWidget {
       ),
     );
   }
+
+  String _headerDate(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
 }
 
 class _AssetRegistryHeaderButton extends StatefulWidget {

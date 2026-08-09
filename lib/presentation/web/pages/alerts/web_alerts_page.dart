@@ -1,7 +1,335 @@
 part of '../../../pages/web_asset_dashboard_page.dart';
 
+class _UnifiedAlertEntry {
+  final WebAlertView view;
+  final String id;
+  final String itemCode;
+  final String assetName;
+  final String title;
+  final String description;
+  final String branch;
+  final String assignedTo;
+  final DateTime date;
+  final AssetStockModel? asset;
+  final Map<String, dynamic>? source;
+
+  const _UnifiedAlertEntry({
+    required this.view,
+    required this.id,
+    required this.itemCode,
+    required this.assetName,
+    required this.title,
+    required this.description,
+    required this.branch,
+    required this.assignedTo,
+    required this.date,
+    required this.asset,
+    this.source,
+  });
+}
+
 extension _AlertsPageExtension on _WebAssetDashboardPageState {
-  Widget _alertsPanel() {
+  Widget _alertsPanel() => _unifiedAlertsPanel();
+
+  Map<WebAlertView, int> get _alertUnreadCounts => {
+    for (final view in WebAlertView.values)
+      view: _alertEntriesFor(view)
+          .where(
+            (entry) =>
+                _alertDaysFromToday(entry.date) <= 7 &&
+                !_seenAlertKeys.contains(_alertEntryKey(entry)),
+          )
+          .length,
+  };
+
+  String _alertEntryKey(_UnifiedAlertEntry entry) =>
+      '${entry.view.name}:${entry.id}:${entry.itemCode}:${entry.date.toIso8601String().split('T').first}';
+
+  List<_UnifiedAlertEntry> _alertEntriesFor(WebAlertView view) {
+    final todayValue = DateTime.now();
+    final today = DateTime(todayValue.year, todayValue.month, todayValue.day);
+    final entries = <_UnifiedAlertEntry>[];
+
+    if (view == WebAlertView.checkoutDue) {
+      for (final row in activeCheckouts) {
+        final date = _parseAlertDate(row['due_date']);
+        if (date == null) continue;
+        final days = _alertDaysFromToday(date, today);
+        if (days > 7) continue;
+        final itemCode = row['item_code']?.toString() ?? '';
+        entries.add(
+          _UnifiedAlertEntry(
+            view: view,
+            id: row['id']?.toString() ?? itemCode,
+            itemCode: itemCode,
+            assetName: row['asset_name']?.toString() ?? itemCode,
+            title: days < 0 ? 'Check-out overdue' : 'Check-in expected soon',
+            description:
+                'Assigned to ${row['assigned_to']?.toString().trim().isNotEmpty == true ? row['assigned_to'] : 'Unassigned'}',
+            branch: row['location']?.toString() ?? '',
+            assignedTo: row['assigned_to']?.toString() ?? '',
+            date: date,
+            asset: _assetByItemCode(itemCode),
+            source: row,
+          ),
+        );
+      }
+    } else if (view == WebAlertView.maintenanceDue ||
+        view == WebAlertView.maintenanceOverdue) {
+      for (final row in maintenanceRecords) {
+        final status = row['status']?.toString().trim().toLowerCase() ?? '';
+        if (status == 'completed' || status == 'closed') continue;
+        final date = _parseAlertDate(row['due_date'] ?? row['completed_date']);
+        if (date == null) continue;
+        final days = _alertDaysFromToday(date, today);
+        if (view == WebAlertView.maintenanceDue && (days < 0 || days > 7)) {
+          continue;
+        }
+        if (view == WebAlertView.maintenanceOverdue && days >= 0) continue;
+        final itemCode = row['item_code']?.toString() ?? '';
+        entries.add(
+          _UnifiedAlertEntry(
+            view: view,
+            id: row['id']?.toString() ?? itemCode,
+            itemCode: itemCode,
+            assetName: row['asset_name']?.toString() ?? itemCode,
+            title: row['title']?.toString().trim().isNotEmpty == true
+                ? row['title'].toString()
+                : 'Scheduled maintenance',
+            description: row['details']?.toString() ?? '',
+            branch: row['branch']?.toString() ?? '',
+            assignedTo: row['maintenance_by']?.toString() ?? '',
+            date: date,
+            asset: _assetByItemCode(itemCode),
+            source: row,
+          ),
+        );
+      }
+    } else {
+      for (final asset in assets) {
+        if (!asset.hasWarranty) continue;
+        final date = _parseAlertDate(asset.warrantyEndDate);
+        if (date == null) continue;
+        entries.add(
+          _UnifiedAlertEntry(
+            view: view,
+            id: asset.id?.toString() ?? asset.itemCode,
+            itemCode: asset.itemCode,
+            assetName: asset.name,
+            title: 'Asset warranty',
+            description: asset.warrantyDescription.trim().isEmpty
+                ? 'Warranty coverage information'
+                : asset.warrantyDescription,
+            branch: asset.location,
+            assignedTo: asset.warrantySerialNo,
+            date: date,
+            asset: asset,
+          ),
+        );
+      }
+    }
+
+    entries.sort((a, b) => a.date.compareTo(b.date));
+    return entries;
+  }
+
+  DateTime? _parseAlertDate(Object? value) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isEmpty) return null;
+    final parsed = DateTime.tryParse(text);
+    if (parsed != null) return DateTime(parsed.year, parsed.month, parsed.day);
+    final parts = text.split('/');
+    if (parts.length != 3) return null;
+    final day = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final year = int.tryParse(parts[2]);
+    if (day == null || month == null || year == null) return null;
+    return DateTime(year, month, day);
+  }
+
+  int _alertDaysFromToday(DateTime date, [DateTime? cleanToday]) {
+    final now = cleanToday ?? DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return DateTime(date.year, date.month, date.day).difference(today).inDays;
+  }
+
+  String _alertViewTitle(WebAlertView view) {
+    switch (view) {
+      case WebAlertView.checkoutDue:
+        return 'Check-out Due';
+      case WebAlertView.maintenanceDue:
+        return 'Maintenance Due';
+      case WebAlertView.maintenanceOverdue:
+        return 'Maintenance Overdue';
+      case WebAlertView.warrantyExpiry:
+        return 'Warranty Expiry';
+    }
+  }
+
+  IconData _alertViewIcon(WebAlertView view) {
+    switch (view) {
+      case WebAlertView.checkoutDue:
+        return Icons.assignment_return_outlined;
+      case WebAlertView.maintenanceDue:
+        return Icons.build_circle_outlined;
+      case WebAlertView.maintenanceOverdue:
+        return Icons.warning_amber_rounded;
+      case WebAlertView.warrantyExpiry:
+        return Icons.verified_user_outlined;
+    }
+  }
+
+  Widget _unifiedAlertsPanel() {
+    final todayValue = DateTime.now();
+    final today = DateTime(todayValue.year, todayValue.month, todayValue.day);
+    final search = alertSearchQuery.trim().toLowerCase();
+    final allForView = _alertEntriesFor(selectedAlertView);
+    final scoped = allForView
+        .where((entry) {
+          if (selectedBranch != null && entry.branch != selectedBranch) {
+            return false;
+          }
+          if (search.isNotEmpty) {
+            final searchable = [
+              entry.assetName,
+              entry.itemCode,
+              entry.title,
+              entry.description,
+              entry.branch,
+              entry.assignedTo,
+            ].join(' ').toLowerCase();
+            if (!searchable.contains(search)) return false;
+          }
+          final days = _alertDaysFromToday(entry.date, today);
+          switch (alertUrgencyFilter) {
+            case 'Overdue':
+              return days < 0;
+            case 'Due today':
+              return days == 0;
+            case 'Upcoming':
+              return days > 0;
+            default:
+              return true;
+          }
+        })
+        .toList(growable: false);
+    final overdue = scoped.where((entry) => entry.date.isBefore(today)).length;
+    final dueSoon = scoped.where((entry) {
+      final days = _alertDaysFromToday(entry.date, today);
+      return days >= 0 && days <= 7;
+    }).length;
+    final affectedBranches = scoped
+        .map((entry) => entry.branch.trim())
+        .where((branch) => branch.isNotEmpty)
+        .toSet()
+        .length;
+    final paged = _paginate(scoped, WebAssetSection.alerts);
+    final exportAssets = <String, AssetStockModel>{};
+    for (final entry in scoped) {
+      if (entry.asset != null) exportAssets[entry.itemCode] = entry.asset!;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _AlertHeroCard(
+          title: 'Smart Alert Center',
+          description:
+              '${_alertViewTitle(selectedAlertView)} · deadlines, expiry and overdue activity in one workspace.',
+          totalAlerts: scoped.length,
+          dueToday: dueSoon,
+          scopeLabel: selectedBranch ?? 'All branches',
+          onRefresh: _loadData,
+          onExport: exportAssets.isEmpty
+              ? null
+              : () => _exportList(
+                  exportAssets.values.toList(growable: false),
+                  '${selectedAlertView.name}_alerts',
+                ),
+        ),
+        const SizedBox(height: 16),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final cards = [
+              _AlertSummaryCard(
+                icon: _alertViewIcon(selectedAlertView),
+                color: const Color(0xff4263eb),
+                label: 'Total Records',
+                value: scoped.length.toString(),
+                note: _alertViewTitle(selectedAlertView),
+              ),
+              _AlertSummaryCard(
+                icon: Icons.upcoming_outlined,
+                color: const Color(0xfff59f00),
+                label: 'Due Within 7 Days',
+                value: dueSoon.toString(),
+                note: 'Requires upcoming attention',
+              ),
+              _AlertSummaryCard(
+                icon: Icons.error_outline_rounded,
+                color: const Color(0xffe53935),
+                label: 'Overdue / Expired',
+                value: overdue.toString(),
+                note: 'Requires immediate action',
+              ),
+              _AlertSummaryCard(
+                icon: Icons.account_tree_outlined,
+                color: const Color(0xff0f9f8f),
+                label: 'Affected Branches',
+                value: affectedBranches.toString(),
+                note: selectedBranch ?? 'Across current scope',
+              ),
+            ];
+            final width = constraints.maxWidth >= 1040
+                ? (constraints.maxWidth - 36) / 4
+                : constraints.maxWidth >= 600
+                ? (constraints.maxWidth - 12) / 2
+                : constraints.maxWidth;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: cards
+                  .map((card) => SizedBox(width: width, child: card))
+                  .toList(growable: false),
+            );
+          },
+        ),
+        const SizedBox(height: 16),
+        _UnifiedAlertsDirectory(
+          title: _alertViewTitle(selectedAlertView),
+          icon: _alertViewIcon(selectedAlertView),
+          entries: paged.items,
+          totalResults: scoped.length,
+          searchController: alertSearchController,
+          searchQuery: alertSearchQuery,
+          urgencyFilter: alertUrgencyFilter,
+          onSearchChanged: (value) => _updateWebState(() {
+            alertSearchQuery = value;
+            _resetPage(WebAssetSection.alerts);
+          }),
+          onUrgencyChanged: (value) => _updateWebState(() {
+            alertUrgencyFilter = value;
+            _resetPage(WebAssetSection.alerts);
+          }),
+          onViewAsset: (entry) {
+            if (entry.asset != null) _showAssetDetails(entry.asset!);
+          },
+          onEditMaintenance: (entry) {
+            if (entry.source != null &&
+                (entry.view == WebAlertView.maintenanceDue ||
+                    entry.view == WebAlertView.maintenanceOverdue)) {
+              _editAlertSchedule(entry.source!);
+            }
+          },
+          currentPage: paged.currentPage,
+          totalPages: paged.totalPages,
+          onPageChanged: (page) => _changePage(WebAssetSection.alerts, page),
+        ),
+      ],
+    );
+  }
+
+  Widget _legacyAlertsPanel() {
     final today = DateTime.now();
     final cleanToday = DateTime(today.year, today.month, today.day);
     final search = alertSearchQuery.trim().toLowerCase();

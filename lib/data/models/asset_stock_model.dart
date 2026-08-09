@@ -41,6 +41,12 @@ class AssetStockModel {
 
   final String warrantyDescription;
 
+  final String warrantyStartDate;
+
+  final String warrantyEndDate;
+
+  final String warrantySerialNo;
+
   final String? warrantyImagePath;
 
   final String? localWarrantyImagePath;
@@ -71,6 +77,9 @@ class AssetStockModel {
     this.description = '',
     this.hasWarranty = false,
     this.warrantyDescription = '',
+    this.warrantyStartDate = '',
+    this.warrantyEndDate = '',
+    this.warrantySerialNo = '',
     this.warrantyImagePath,
     this.localWarrantyImagePath,
     required this.createdAt,
@@ -104,6 +113,9 @@ class AssetStockModel {
       'description': description,
       'has_warranty': hasWarranty,
       'warranty_description': warrantyDescription,
+      'warranty_start_date': warrantyStartDate,
+      'warranty_end_date': warrantyEndDate,
+      'warranty_serial_no': warrantySerialNo,
       'warranty_image_path': warrantyImagePath,
       'local_warranty_image_path': localWarrantyImagePath,
       'is_synced': isSynced,
@@ -160,6 +172,12 @@ class AssetStockModel {
 
       warrantyDescription: json['warranty_description']?.toString() ?? '',
 
+      warrantyStartDate: json['warranty_start_date']?.toString() ?? '',
+
+      warrantyEndDate: json['warranty_end_date']?.toString() ?? '',
+
+      warrantySerialNo: json['warranty_serial_no']?.toString() ?? '',
+
       warrantyImagePath: json['warranty_image_path']?.toString(),
 
       localWarrantyImagePath: json['local_warranty_image_path']?.toString(),
@@ -194,6 +212,9 @@ class AssetStockModel {
     String? description,
     bool? hasWarranty,
     String? warrantyDescription,
+    String? warrantyStartDate,
+    String? warrantyEndDate,
+    String? warrantySerialNo,
     String? warrantyImagePath,
     String? localWarrantyImagePath,
   }) {
@@ -235,6 +256,12 @@ class AssetStockModel {
       hasWarranty: hasWarranty ?? this.hasWarranty,
 
       warrantyDescription: warrantyDescription ?? this.warrantyDescription,
+
+      warrantyStartDate: warrantyStartDate ?? this.warrantyStartDate,
+
+      warrantyEndDate: warrantyEndDate ?? this.warrantyEndDate,
+
+      warrantySerialNo: warrantySerialNo ?? this.warrantySerialNo,
 
       warrantyImagePath: warrantyImagePath ?? this.warrantyImagePath,
 

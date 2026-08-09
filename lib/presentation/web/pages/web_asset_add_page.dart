@@ -9,6 +9,7 @@ import '../data/web_asset_repository.dart';
 import '../utils/web_dropdown_options.dart';
 import '../widgets/web_asset_shell.dart';
 import '../widgets/web_hover_surface.dart';
+import '../widgets/common/web_single_date_picker.dart';
 
 class WebAssetAddPage extends StatefulWidget {
   final String? initialBranch;
@@ -42,6 +43,9 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
   final serialController = TextEditingController();
   final notesController = TextEditingController();
   final warrantyDescriptionController = TextEditingController();
+  final warrantyStartDateController = TextEditingController();
+  final warrantyEndDateController = TextEditingController();
+  final warrantySerialController = TextEditingController();
 
   List<AssetItemModel> masterItems = [];
   List<String> branches = [];
@@ -74,6 +78,9 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
     serialController.dispose();
     notesController.dispose();
     warrantyDescriptionController.dispose();
+    warrantyStartDateController.dispose();
+    warrantyEndDateController.dispose();
+    warrantySerialController.dispose();
     super.dispose();
   }
 
@@ -206,6 +213,13 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
       'warranty_description': hasWarranty
           ? warrantyDescriptionController.text
           : '',
+      'warranty_start_date': hasWarranty
+          ? _databaseDate(warrantyStartDateController.text)
+          : null,
+      'warranty_end_date': hasWarranty
+          ? _databaseDate(warrantyEndDateController.text)
+          : null,
+      'warranty_serial_no': hasWarranty ? warrantySerialController.text : '',
       'warranty_image_path': hasWarranty ? warrantyImageUrl : null,
       'cost': cost,
       'image_path': imageUrl,
@@ -514,6 +528,9 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
                                       selectedWarrantyImageBytes = null;
                                       selectedWarrantyImageName = null;
                                       warrantyDescriptionController.clear();
+                                      warrantyStartDateController.clear();
+                                      warrantyEndDateController.clear();
+                                      warrantySerialController.clear();
                                     }
                                   });
                                 },
@@ -526,6 +543,33 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
                                 minLines: 2,
                                 maxLines: 4,
                                 decoration: _decoration('Warranty Description'),
+                              ),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: WarrantyDateField(
+                                      label: 'Warranty Start Date',
+                                      controller: warrantyStartDateController,
+                                      format: _date,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: WarrantyDateField(
+                                      label: 'Warranty End Date',
+                                      controller: warrantyEndDateController,
+                                      format: _date,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              TextField(
+                                controller: warrantySerialController,
+                                decoration: _decoration(
+                                  'Warranty Serial No. (optional)',
+                                ),
                               ),
                               const SizedBox(height: 14),
                               _ImagePickerPanel(
@@ -557,6 +601,14 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
     return '${value.day.toString().padLeft(2, '0')}/'
         '${value.month.toString().padLeft(2, '0')}/'
         '${value.year}';
+  }
+
+  String? _databaseDate(String value) {
+    final parts = value.trim().split('/');
+    if (parts.length == 3) {
+      return '${parts[2]}-${parts[1].padLeft(2, '0')}-${parts[0].padLeft(2, '0')}';
+    }
+    return value.trim().isEmpty ? null : value.trim();
   }
 }
 
@@ -714,6 +766,53 @@ class _Field extends StatelessWidget {
             ),
     );
   }
+}
+
+class WarrantyDateField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final String Function(DateTime) format;
+
+  const WarrantyDateField({
+    super.key,
+    required this.label,
+    required this.controller,
+    required this.format,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      readOnly: true,
+      onTap: () async {
+        final initialDate = _parseWebDate(controller.text) ?? DateTime.now();
+        final selected = await showWebSingleDatePicker(
+          context: context,
+          initialDate: initialDate,
+          firstDate: DateTime(2000),
+          lastDate: DateTime(2100),
+          title: label,
+        );
+        if (selected != null) controller.text = format(selected);
+      },
+      decoration: _decoration(
+        label,
+      ).copyWith(suffixIcon: const Icon(Icons.calendar_month_outlined)),
+    );
+  }
+}
+
+DateTime? _parseWebDate(String value) {
+  final direct = DateTime.tryParse(value.trim());
+  if (direct != null) return direct;
+  final parts = value.trim().split('/');
+  if (parts.length != 3) return null;
+  final day = int.tryParse(parts[0]);
+  final month = int.tryParse(parts[1]);
+  final year = int.tryParse(parts[2]);
+  if (day == null || month == null || year == null) return null;
+  return DateTime(year, month, day);
 }
 
 InputDecoration _decoration(String label) {

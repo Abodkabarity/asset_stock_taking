@@ -28,7 +28,20 @@ class WebAssetImage extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: hasImage
-          ? Image.network(path!, fit: BoxFit.cover)
+          ? Image.network(
+              path!,
+              width: width,
+              height: height,
+              fit: BoxFit.cover,
+              cacheWidth: (width * 2).round(),
+              cacheHeight: (height * 2).round(),
+              filterQuality: FilterQuality.medium,
+              errorBuilder: (_, _, _) => const Icon(
+                Icons.broken_image_outlined,
+                color: AppColors.subText,
+                size: 30,
+              ),
+            )
           : const Icon(
               Icons.inventory_2_outlined,
               color: AppColors.primaryColor,

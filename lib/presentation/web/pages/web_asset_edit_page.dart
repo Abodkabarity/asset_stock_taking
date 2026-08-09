@@ -40,6 +40,9 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
   late final TextEditingController costController;
   late final TextEditingController descriptionController;
   late final TextEditingController warrantyDescriptionController;
+  late final TextEditingController warrantyStartDateController;
+  late final TextEditingController warrantyEndDateController;
+  late final TextEditingController warrantySerialController;
   late String status;
   late bool hasWarranty;
   String? assetImageUrl;
@@ -67,6 +70,15 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
     warrantyDescriptionController = TextEditingController(
       text: widget.asset.warrantyDescription,
     );
+    warrantyStartDateController = TextEditingController(
+      text: widget.asset.warrantyStartDate,
+    );
+    warrantyEndDateController = TextEditingController(
+      text: widget.asset.warrantyEndDate,
+    );
+    warrantySerialController = TextEditingController(
+      text: widget.asset.warrantySerialNo,
+    );
     status = widget.asset.status.isEmpty ? 'New' : widget.asset.status;
     hasWarranty = widget.asset.hasWarranty;
     assetImageUrl = widget.asset.imagePath;
@@ -83,6 +95,9 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
     costController.dispose();
     descriptionController.dispose();
     warrantyDescriptionController.dispose();
+    warrantyStartDateController.dispose();
+    warrantyEndDateController.dispose();
+    warrantySerialController.dispose();
     super.dispose();
   }
 
@@ -139,6 +154,9 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
     if (!hasWarranty) {
       nextWarrantyImageUrl = null;
       warrantyDescriptionController.clear();
+      warrantyStartDateController.clear();
+      warrantyEndDateController.clear();
+      warrantySerialController.clear();
     }
 
     await repository.updateAsset(
@@ -156,6 +174,13 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
             ? warrantyDescriptionController.text
             : '',
         'warranty_image_path': nextWarrantyImageUrl,
+        'warranty_start_date': hasWarranty
+            ? _databaseDate(warrantyStartDateController.text)
+            : null,
+        'warranty_end_date': hasWarranty
+            ? _databaseDate(warrantyEndDateController.text)
+            : null,
+        'warranty_serial_no': hasWarranty ? warrantySerialController.text : '',
       },
     );
 
@@ -393,6 +418,9 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
                               if (!hasWarranty) {
                                 selectedWarrantyImageBytes = null;
                                 selectedWarrantyImageName = null;
+                                warrantyStartDateController.clear();
+                                warrantyEndDateController.clear();
+                                warrantySerialController.clear();
                               }
                             });
                           },
@@ -405,6 +433,33 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
                           minLines: 2,
                           maxLines: 4,
                           decoration: _decoration('Warranty Description'),
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: WarrantyDateField(
+                                label: 'Warranty Start Date',
+                                controller: warrantyStartDateController,
+                                format: _date,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: WarrantyDateField(
+                                label: 'Warranty End Date',
+                                controller: warrantyEndDateController,
+                                format: _date,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: warrantySerialController,
+                          decoration: _decoration(
+                            'Warranty Serial No. (optional)',
+                          ),
                         ),
                         const SizedBox(height: 14),
                         _ImagePickerPanel(
@@ -438,6 +493,14 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
     return '${value.day.toString().padLeft(2, '0')}/'
         '${value.month.toString().padLeft(2, '0')}/'
         '${value.year}';
+  }
+
+  String? _databaseDate(String value) {
+    final parts = value.trim().split('/');
+    if (parts.length == 3) {
+      return '${parts[2]}-${parts[1].padLeft(2, '0')}-${parts[0].padLeft(2, '0')}';
+    }
+    return value.trim().isEmpty ? null : value.trim();
   }
 }
 

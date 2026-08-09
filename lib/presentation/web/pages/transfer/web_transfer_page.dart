@@ -1,87 +1,81 @@
 part of '../../../pages/web_asset_dashboard_page.dart';
 
 extension _TransferPageExtension on _WebAssetDashboardPageState {
-  Widget _operationPanel({
-    required String title,
-    required IconData icon,
-    required String description,
-    required String actionLabel,
-    required IconData actionIcon,
-    required Future<void> Function(AssetStockModel asset) onAction,
-  }) {
-    final search = searchQuery.trim().toLowerCase();
+  Widget _transferPanel() {
+    final query = searchQuery.trim().toLowerCase();
+    final assetByCode = <String, AssetStockModel>{
+      for (final asset in assets) asset.itemCode: asset,
+    };
 
-    final filteredAssets =
-        visibleAssets.where((asset) {
-          return _matchesBranchAndSearch(asset, search);
-        }).toList()..sort(
-          (first, second) =>
-              first.name.toLowerCase().compareTo(second.name.toLowerCase()),
-        );
+    final records = transferRecords
+        .where((record) {
+          final itemCode = record['item_code']?.toString() ?? '';
+          final from = record['from_branch']?.toString() ?? '';
+          final to = record['to_branch']?.toString() ?? '';
+          final description = record['description']?.toString() ?? '';
+          final asset = assetByCode[itemCode];
+          final matchesBranch =
+              selectedBranch == null ||
+              from == selectedBranch ||
+              to == selectedBranch;
+          final matchesSearch =
+              query.isEmpty ||
+              itemCode.toLowerCase().contains(query) ||
+              from.toLowerCase().contains(query) ||
+              to.toLowerCase().contains(query) ||
+              description.toLowerCase().contains(query) ||
+              (asset?.name.toLowerCase().contains(query) ?? false);
+          return matchesBranch && matchesSearch;
+        })
+        .toList(growable: false);
 
-    final pagedAssets = _paginate(filteredAssets, WebAssetSection.transfer);
-
-    final locationsCount = filteredAssets
-        .map((asset) => asset.location.trim())
-        .where((location) => location.isNotEmpty)
-        .toSet()
-        .length;
-
-    final assetValue = filteredAssets.fold<double>(
-      0,
-      (total, asset) => total + asset.cost,
-    );
-
-    final categoriesCount = filteredAssets
-        .map((asset) => asset.category.trim())
-        .where((category) => category.isNotEmpty)
-        .toSet()
-        .length;
+    final pagedRecords = _paginate(records, WebAssetSection.transfer);
+    final movedAssets = records
+        .map((record) => record['item_code']?.toString() ?? '')
+        .where((code) => code.isNotEmpty)
+        .toSet();
+    final affectedLocations = <String>{
+      for (final record in records)
+        if ((record['from_branch']?.toString().trim() ?? '').isNotEmpty)
+          record['from_branch'].toString().trim(),
+      for (final record in records)
+        if ((record['to_branch']?.toString().trim() ?? '').isNotEmpty)
+          record['to_branch'].toString().trim(),
+    };
+    final latestDate = records.isEmpty
+        ? '-'
+        : _transferDateLabel(records.first['created_at']);
 
     return TweenAnimationBuilder<double>(
-      key: ValueKey(
-        'transfer-${selectedBranch ?? 'all'}-${filteredAssets.length}',
-      ),
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 520),
+      key: ValueKey('transfer-history-${selectedBranch ?? 'all'}'),
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 480),
       curve: Curves.easeOutCubic,
-      builder: (context, animationValue, child) {
-        return Opacity(
-          opacity: animationValue,
-          child: Transform.translate(
-            offset: Offset(0, 18 * (1 - animationValue)),
-            child: child,
-          ),
-        );
-      },
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 16 * (1 - value)),
+          child: child,
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _TransferHeroCard(
-            title: title,
-            totalAssets: filteredAssets.length,
+            title: 'Move Assets',
+            totalAssets: records.length,
             selectedBranch: selectedBranch,
-            onExport: () {
-              _exportList(
-                filteredAssets,
-                selectedBranch == null
-                    ? 'move_assets'
-                    : '${selectedBranch}_move_assets',
-              );
-            },
+            onSelectAssets: _openTransferAssetPicker,
           ),
           const SizedBox(height: 18),
-
           LayoutBuilder(
             builder: (context, constraints) {
               final width = constraints.maxWidth;
-
               final cardWidth = width >= 1080
                   ? (width - 48) / 4
                   : width >= 720
                   ? (width - 16) / 2
                   : width;
-
               return Wrap(
                 spacing: 16,
                 runSpacing: 16,
@@ -91,38 +85,38 @@ extension _TransferPageExtension on _WebAssetDashboardPageState {
                     child: _MaintenanceStatCard(
                       icon: Icons.swap_horiz_rounded,
                       color: const Color(0xff4263eb),
-                      title: 'Transfer Ready',
-                      value: filteredAssets.length.toString(),
-                      subtitle: 'Assets available for transfer',
+                      title: 'Completed Moves',
+                      value: records.length.toString(),
+                      subtitle: 'Recorded transfer operations',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: _MaintenanceStatCard(
+                      icon: Icons.inventory_2_outlined,
+                      color: const Color(0xff0f9f8f),
+                      title: 'Moved Assets',
+                      value: movedAssets.length.toString(),
+                      subtitle: 'Unique assets transferred',
                     ),
                   ),
                   SizedBox(
                     width: cardWidth,
                     child: _MaintenanceStatCard(
                       icon: Icons.location_on_outlined,
-                      color: const Color(0xff0f9f8f),
-                      title: 'Locations',
-                      value: locationsCount.toString(),
-                      subtitle: 'Branches with transferable assets',
-                    ),
-                  ),
-                  SizedBox(
-                    width: cardWidth,
-                    child: _MaintenanceStatCard(
-                      icon: Icons.payments_outlined,
                       color: const Color(0xfff59f00),
-                      title: 'Asset Value',
-                      value: assetValue.toStringAsFixed(2),
-                      subtitle: 'Total value in AED',
+                      title: 'Locations',
+                      value: affectedLocations.length.toString(),
+                      subtitle: 'Branches in movement history',
                     ),
                   ),
                   SizedBox(
                     width: cardWidth,
                     child: _MaintenanceStatCard(
-                      icon: Icons.category_outlined,
+                      icon: Icons.schedule_rounded,
                       color: const Color(0xff7950f2),
-                      title: 'Categories',
-                      value: categoriesCount.toString(),
+                      title: 'Latest Move',
+                      value: latestDate,
                       subtitle: selectedBranch ?? 'Across all branches',
                     ),
                   ),
@@ -131,7 +125,6 @@ extension _TransferPageExtension on _WebAssetDashboardPageState {
             },
           ),
           const SizedBox(height: 18),
-
           Container(
             width: double.infinity,
             decoration: BoxDecoration(
@@ -140,7 +133,7 @@ extension _TransferPageExtension on _WebAssetDashboardPageState {
               border: Border.all(color: const Color(0xffdfe7f2)),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xff1d3557).withValues(alpha: 0.055),
+                  color: const Color(0xff1d3557).withValues(alpha: .055),
                   blurRadius: 28,
                   spreadRadius: -10,
                   offset: const Offset(0, 14),
@@ -153,201 +146,39 @@ extension _TransferPageExtension on _WebAssetDashboardPageState {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final compact = constraints.maxWidth < 760;
-
-                        final searchField = Container(
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: const Color(0xfff8fafd),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xffdfe7f2)),
-                          ),
-                          child: TextField(
-                            controller: searchController,
-                            onChanged: (value) {
-                              _updateWebState(() {
-                                searchQuery = value;
-                                _resetPage(WebAssetSection.transfer);
-                              });
-                            },
-                            decoration: InputDecoration(
-                              hintText:
-                                  'Search by asset name, tag ID or location',
-                              hintStyle: const TextStyle(
-                                color: Color(0xff8a97aa),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              prefixIcon: const Icon(
-                                Icons.search_rounded,
-                                color: Color(0xff5f6f86),
-                                size: 21,
-                              ),
-                              suffixIcon: searchController.text.isEmpty
-                                  ? null
-                                  : IconButton(
-                                      tooltip: 'Clear search',
-                                      onPressed: () {
-                                        searchController.clear();
-
-                                        _updateWebState(() {
-                                          searchQuery = '';
-                                          _resetPage(WebAssetSection.transfer);
-                                        });
-                                      },
-                                      icon: const Icon(
-                                        Icons.close_rounded,
-                                        size: 19,
-                                      ),
-                                    ),
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 15,
-                              ),
-                            ),
-                          ),
-                        );
-
-                        final resultBadge = Container(
-                          height: 50,
-                          padding: const EdgeInsets.symmetric(horizontal: 17),
-                          decoration: BoxDecoration(
-                            color: const Color(0xffedf4ff),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xffcfe0ff)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 31,
-                                height: 31,
-                                decoration: BoxDecoration(
-                                  color: const Color(
-                                    0xff4263eb,
-                                  ).withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(9),
-                                ),
-                                child: const Icon(
-                                  Icons.compare_arrows_rounded,
-                                  color: Color(0xff3156e8),
-                                  size: 19,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Text(
-                                '${filteredAssets.length} ready to transfer',
-                                style: const TextStyle(
-                                  color: Color(0xff21418d),
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-
-                        if (compact) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              searchField,
-                              const SizedBox(height: 12),
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: resultBadge,
-                              ),
-                            ],
-                          );
-                        }
-
-                        return Row(
-                          children: [
-                            Expanded(child: searchField),
-                            const SizedBox(width: 14),
-                            resultBadge,
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-
-                  Container(
-                    margin: const EdgeInsets.fromLTRB(22, 0, 22, 20),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xfff4f8ff), Color(0xfff8fbff)],
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xffdbe7fa)),
-                    ),
-                    child: Row(
-                      children: [
-                        const _TransferInformationIcon(),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            description.isEmpty
-                                ? 'Move assets between branches or sites directly from this panel. '
-                                      'Select any asset below to start the transfer process and keep movement records organized.'
-                                : description,
-                            style: const TextStyle(
-                              color: Color(0xff60718b),
-                              fontSize: 12.5,
-                              height: 1.5,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 0, 22, 14),
+                    padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
                     child: Row(
                       children: [
                         Container(
                           width: 5,
-                          height: 27,
+                          height: 34,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
-                              colors: [Color(0xff4169e1), Color(0xff19a7ce)],
+                              colors: [Color(0xff4263eb), Color(0xff15aabf)],
                             ),
                             borderRadius: BorderRadius.circular(20),
                           ),
                         ),
                         const SizedBox(width: 11),
-                        Expanded(
+                        const Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Select Asset For $title',
-                                style: const TextStyle(
-                                  color: Color(0xff16243c),
-                                  fontSize: 16.5,
+                                'Transfer History',
+                                style: TextStyle(
+                                  color: Color(0xff17243b),
+                                  fontSize: 17,
                                   fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.2,
                                 ),
                               ),
-                              const SizedBox(height: 3),
-                              const Text(
-                                'Choose an asset and begin the transfer workflow',
+                              SizedBox(height: 4),
+                              Text(
+                                'Only completed movements from one branch to another',
                                 style: TextStyle(
-                                  color: Color(0xff8794a7),
+                                  color: Color(0xff8a97a9),
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -357,8 +188,8 @@ extension _TransferPageExtension on _WebAssetDashboardPageState {
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 11,
-                            vertical: 6,
+                            horizontal: 12,
+                            vertical: 7,
                           ),
                           decoration: BoxDecoration(
                             color: const Color(0xfff1f5fb),
@@ -366,10 +197,10 @@ extension _TransferPageExtension on _WebAssetDashboardPageState {
                             border: Border.all(color: const Color(0xffdfe6f0)),
                           ),
                           child: Text(
-                            '${filteredAssets.length} records',
+                            '${records.length} movements',
                             style: const TextStyle(
                               color: Color(0xff60718a),
-                              fontSize: 11,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -377,58 +208,67 @@ extension _TransferPageExtension on _WebAssetDashboardPageState {
                       ],
                     ),
                   ),
-
+                  const Divider(height: 1, color: Color(0xffe8edf4)),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                    padding: const EdgeInsets.fromLTRB(22, 16, 22, 16),
+                    child: TextField(
+                      controller: searchController,
+                      onChanged: (value) => _updateWebState(() {
+                        searchQuery = value;
+                        _resetPage(WebAssetSection.transfer);
+                      }),
+                      decoration: InputDecoration(
+                        hintText: 'Search movement by asset, tag ID or branch',
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        suffixIcon: searchController.text.isEmpty
+                            ? null
+                            : IconButton(
+                                onPressed: () {
+                                  searchController.clear();
+                                  _updateWebState(() {
+                                    searchQuery = '';
+                                    _resetPage(WebAssetSection.transfer);
+                                  });
+                                },
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 0, 22, 20),
                     child: Column(
                       children: [
-                        _ModernTransferTableHeader(operationLabel: actionLabel),
-
-                        if (filteredAssets.isEmpty)
-                          _TransferEmptyState(hasSearch: search.isNotEmpty)
-                        else
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Column(
-                              children: [
-                                for (
-                                  var index = 0;
-                                  index < pagedAssets.items.length;
-                                  index++
-                                )
-                                  _ModernTransferAssetRow(
-                                    key: ValueKey(
-                                      'transfer-${pagedAssets.items[index].itemCode}',
-                                    ),
-                                    asset: pagedAssets.items[index],
-                                    animationDelay: index * 35,
-                                    actionLabel: actionLabel,
-                                    actionIcon: actionIcon,
-                                    onDetails: () => _showAssetDetails(
-                                      pagedAssets.items[index],
-                                    ),
-                                    onOperation: () =>
-                                        onAction(pagedAssets.items[index]),
-                                  ),
-                              ],
+                        const _TransferHistoryTableHeader(),
+                        if (records.isEmpty)
+                          _TransferHistoryEmptyState(
+                            hasSearch: query.isNotEmpty,
+                            onSelectAsset: _openTransferAssetPicker,
+                          )
+                        else ...[
+                          const SizedBox(height: 8),
+                          for (
+                            var index = 0;
+                            index < pagedRecords.items.length;
+                            index++
+                          )
+                            _TransferHistoryRow(
+                              record: pagedRecords.items[index],
+                              asset:
+                                  assetByCode[pagedRecords
+                                      .items[index]['item_code']],
                             ),
-                          ),
-
-                        if (filteredAssets.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           _PaginationBar(
-                            currentPage: pagedAssets.currentPage,
-                            totalPages: pagedAssets.totalPages,
-                            totalItems: pagedAssets.totalItems,
+                            currentPage: pagedRecords.currentPage,
+                            totalPages: pagedRecords.totalPages,
+                            totalItems: pagedRecords.totalItems,
                             pageSize:
                                 _WebAssetDashboardPageState._assetsPerPage,
-                            onPageChanged: (page) {
-                              _changePage(WebAssetSection.transfer, page);
-                            },
+                            onPageChanged: (page) =>
+                                _changePage(WebAssetSection.transfer, page),
                           ),
                         ],
-
-                        const SizedBox(height: 20),
                       ],
                     ),
                   ),
@@ -439,5 +279,11 @@ extension _TransferPageExtension on _WebAssetDashboardPageState {
         ],
       ),
     );
+  }
+
+  String _transferDateLabel(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (date == null) return '-';
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 }

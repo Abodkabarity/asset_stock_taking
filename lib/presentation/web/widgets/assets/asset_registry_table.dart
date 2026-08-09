@@ -82,20 +82,7 @@ class _AssetRegistryRow extends StatefulWidget {
 
 class _AssetRegistryRowState extends State<_AssetRegistryRow> {
   bool hovered = false;
-  bool visible = false;
-
-  @override
-  void initState() {
-    super.initState();
-
-    Future<void>.delayed(Duration(milliseconds: widget.animationDelay), () {
-      if (!mounted) return;
-
-      setState(() {
-        visible = true;
-      });
-    });
-  }
+  final bool visible = true;
 
   @override
   Widget build(BuildContext context) {

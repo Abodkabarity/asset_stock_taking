@@ -272,17 +272,14 @@ class _MoreActionsButton extends StatelessWidget {
             await _updateStatus(context, asset, 'Disposed');
             break;
           case 'reserve':
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Reserve saved as a note only')),
-            );
             break;
         }
       },
-      itemBuilder: (context) => const [
-        PopupMenuItem(value: 'dispose', child: Text('Dispose')),
-        PopupMenuItem(value: 'maintenance', child: Text('Maintenance')),
-        PopupMenuItem(value: 'move', child: Text('Move / Transfer')),
-        PopupMenuItem(value: 'reserve', child: Text('Reserve')),
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: 'dispose', child: Text('Dispose')),
+        const PopupMenuItem(value: 'maintenance', child: Text('Maintenance')),
+        if (asset.status.trim().toLowerCase() != 'reserved')
+          const PopupMenuItem(value: 'move', child: Text('Move / Transfer')),
       ],
       child: Container(
         height: 38,
@@ -322,6 +319,16 @@ class _MoreActionsButton extends StatelessWidget {
     BuildContext context,
     AssetStockModel asset,
   ) async {
+    if (asset.status.trim().toLowerCase() == 'reserved') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This asset is reserved. Use Reserve > Transfer or Unreserve first.',
+          ),
+        ),
+      );
+      return;
+    }
     final repository = WebAssetRepository();
     final branches = alphabetizedWebOptions(await repository.getBranches());
     if (!context.mounted) return;
@@ -658,6 +665,18 @@ class _WarrantyTab extends StatelessWidget {
             rows: [
               ('Warranty', 'Yes'),
               ('Description', asset.warrantyDescription),
+              (
+                'Start Date',
+                asset.warrantyStartDate.isEmpty ? '-' : asset.warrantyStartDate,
+              ),
+              (
+                'End Date',
+                asset.warrantyEndDate.isEmpty ? '-' : asset.warrantyEndDate,
+              ),
+              (
+                'Warranty Serial No.',
+                asset.warrantySerialNo.isEmpty ? '-' : asset.warrantySerialNo,
+              ),
             ],
           ),
         ),

@@ -175,6 +175,22 @@ class _TopBar extends StatelessWidget {
         return 'Disposed Assets';
       case WebAssetSection.maintenance:
         return 'Maintenance';
+      case WebAssetSection.checkout:
+        return 'Check Out';
+      case WebAssetSection.checkin:
+        return 'Check In';
+      case WebAssetSection.reserve:
+        return 'Reserve';
+      case WebAssetSection.setupAssets:
+        return 'Asset Master';
+      case WebAssetSection.setupBranches:
+        return 'Branches';
+      case WebAssetSection.setupClassifications:
+        return 'Classifications';
+      case WebAssetSection.setupCategories:
+        return 'Categories';
+      case WebAssetSection.setupSubCategories:
+        return 'Sub Categories';
     }
   }
 
@@ -194,6 +210,22 @@ class _TopBar extends StatelessWidget {
         return 'Disposed asset register';
       case WebAssetSection.maintenance:
         return 'Assets currently under maintenance';
+      case WebAssetSection.checkout:
+        return 'Assign an asset to a person';
+      case WebAssetSection.checkin:
+        return 'Return checked-out assets to service';
+      case WebAssetSection.reserve:
+        return 'Reserve assets for their planned destination';
+      case WebAssetSection.setupAssets:
+        return 'Manage asset master definitions';
+      case WebAssetSection.setupBranches:
+        return 'Manage pharmacy branches and locations';
+      case WebAssetSection.setupClassifications:
+        return 'Manage asset confidentiality classifications';
+      case WebAssetSection.setupCategories:
+        return 'Manage master asset categories';
+      case WebAssetSection.setupSubCategories:
+        return 'Manage master asset sub categories';
     }
   }
 }
@@ -201,6 +233,9 @@ class _TopBar extends StatelessWidget {
 class _Sidebar extends StatelessWidget {
   final WebAssetSection section;
   final int alertCount;
+  final WebAlertView selectedAlertView;
+  final Map<WebAlertView, int> alertUnreadCounts;
+  final ValueChanged<WebAlertView> onAlertSelected;
   final ValueChanged<WebAssetSection> onSelected;
   final VoidCallback onAddAsset;
   final VoidCallback onAddInventory;
@@ -210,6 +245,9 @@ class _Sidebar extends StatelessWidget {
   const _Sidebar({
     required this.section,
     required this.alertCount,
+    required this.selectedAlertView,
+    required this.alertUnreadCounts,
+    required this.onAlertSelected,
     required this.onSelected,
     required this.onAddAsset,
     required this.onAddInventory,
@@ -277,12 +315,12 @@ class _Sidebar extends StatelessWidget {
                     selected: section == WebAssetSection.dashboard,
                     onTap: () => onSelected(WebAssetSection.dashboard),
                   ),
-                  _SidebarItem(
-                    icon: Icons.notifications_none_rounded,
-                    label: 'Alerts',
-                    badge: alertCount > 0 ? alertCount.toString() : null,
+                  _AlertsSidebarGroup(
                     selected: section == WebAssetSection.alerts,
-                    onTap: () => onSelected(WebAssetSection.alerts),
+                    selectedView: selectedAlertView,
+                    totalUnread: alertCount,
+                    unreadCounts: alertUnreadCounts,
+                    onSelected: onAlertSelected,
                   ),
                   _SidebarGroup(
                     selected: section,
@@ -317,12 +355,7 @@ class _Sidebar extends StatelessWidget {
                     selected: false,
                     onTap: () => onSelected(WebAssetSection.dashboard),
                   ),
-                  _SidebarItem(
-                    icon: Icons.tune_rounded,
-                    label: 'Setup',
-                    selected: false,
-                    onTap: () => onSelected(WebAssetSection.dashboard),
-                  ),
+                  _SetupSidebarGroup(selected: section, onSelected: onSelected),
                 ],
               ),
             ),
@@ -363,6 +396,116 @@ class _DashboardBrandMark extends StatelessWidget {
   );
 }
 
+class _AlertsSidebarGroup extends StatefulWidget {
+  final bool selected;
+  final WebAlertView selectedView;
+  final int totalUnread;
+  final Map<WebAlertView, int> unreadCounts;
+  final ValueChanged<WebAlertView> onSelected;
+
+  const _AlertsSidebarGroup({
+    required this.selected,
+    required this.selectedView,
+    required this.totalUnread,
+    required this.unreadCounts,
+    required this.onSelected,
+  });
+
+  @override
+  State<_AlertsSidebarGroup> createState() => _AlertsSidebarGroupState();
+}
+
+class _AlertsSidebarGroupState extends State<_AlertsSidebarGroup> {
+  late bool expanded = widget.selected;
+
+  @override
+  void didUpdateWidget(covariant _AlertsSidebarGroup oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected && !oldWidget.selected) expanded = true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _SidebarItem(
+          icon: Icons.notifications_none_rounded,
+          label: 'Alerts',
+          badge: widget.totalUnread > 0 ? widget.totalUnread.toString() : null,
+          selected: widget.selected,
+          onTap: () {
+            setState(() => expanded = !expanded);
+            if (!widget.selected) widget.onSelected(widget.selectedView);
+          },
+          trailing: AnimatedRotation(
+            turns: expanded ? .25 : 0,
+            duration: const Duration(milliseconds: 200),
+            child: const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: Colors.white70,
+            ),
+          ),
+        ),
+        ClipRect(
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: expanded
+                ? Column(
+                    children: [
+                      _alertItem(
+                        WebAlertView.checkoutDue,
+                        Icons.assignment_ind_outlined,
+                        'Check-out Due',
+                        const Color(0xfff59f00),
+                      ),
+                      _alertItem(
+                        WebAlertView.maintenanceDue,
+                        Icons.build_circle_outlined,
+                        'Maintenance Due',
+                        const Color(0xfff59f00),
+                      ),
+                      _alertItem(
+                        WebAlertView.maintenanceOverdue,
+                        Icons.warning_amber_rounded,
+                        'Maintenance Overdue',
+                        const Color(0xffe53935),
+                      ),
+                      _alertItem(
+                        WebAlertView.warrantyExpiry,
+                        Icons.verified_user_outlined,
+                        'Warranty Expiry',
+                        const Color(0xffe83e5b),
+                      ),
+                    ],
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _alertItem(
+    WebAlertView view,
+    IconData icon,
+    String label,
+    Color color,
+  ) {
+    final unread = widget.unreadCounts[view] ?? 0;
+    return _SidebarSubItem(
+      icon: icon,
+      label: label,
+      selected: widget.selected && widget.selectedView == view,
+      badge: unread > 0 ? unread.toString() : null,
+      badgeColor: color,
+      onTap: () => widget.onSelected(view),
+    );
+  }
+}
+
 class _SidebarGroup extends StatefulWidget {
   final WebAssetSection selected;
   final ValueChanged<WebAssetSection> onSelected;
@@ -387,7 +530,10 @@ class _SidebarGroupState extends State<_SidebarGroup> {
       section == WebAssetSection.assets ||
       section == WebAssetSection.transfer ||
       section == WebAssetSection.dispose ||
-      section == WebAssetSection.maintenance;
+      section == WebAssetSection.maintenance ||
+      section == WebAssetSection.checkout ||
+      section == WebAssetSection.checkin ||
+      section == WebAssetSection.reserve;
 
   @override
   void initState() {
@@ -466,6 +612,25 @@ class _SidebarGroupState extends State<_SidebarGroup> {
                             widget.selected == WebAssetSection.maintenance,
                         onTap: () =>
                             widget.onSelected(WebAssetSection.maintenance),
+                      ),
+                      _SidebarSubItem(
+                        icon: Icons.person_add_alt_1_outlined,
+                        label: 'Check Out',
+                        selected: widget.selected == WebAssetSection.checkout,
+                        onTap: () =>
+                            widget.onSelected(WebAssetSection.checkout),
+                      ),
+                      _SidebarSubItem(
+                        icon: Icons.assignment_return_outlined,
+                        label: 'Check In',
+                        selected: widget.selected == WebAssetSection.checkin,
+                        onTap: () => widget.onSelected(WebAssetSection.checkin),
+                      ),
+                      _SidebarSubItem(
+                        icon: Icons.bookmark_added_outlined,
+                        label: 'Reserve',
+                        selected: widget.selected == WebAssetSection.reserve,
+                        onTap: () => widget.onSelected(WebAssetSection.reserve),
                       ),
                     ],
                   )
@@ -565,6 +730,121 @@ class _InventorySidebarGroupState extends State<_InventorySidebarGroup> {
   }
 }
 
+class _SetupSidebarGroup extends StatefulWidget {
+  final WebAssetSection selected;
+  final ValueChanged<WebAssetSection> onSelected;
+
+  const _SetupSidebarGroup({required this.selected, required this.onSelected});
+
+  @override
+  State<_SetupSidebarGroup> createState() => _SetupSidebarGroupState();
+}
+
+class _SetupSidebarGroupState extends State<_SetupSidebarGroup> {
+  late bool expanded;
+
+  bool _isSetup(WebAssetSection section) =>
+      section == WebAssetSection.setupAssets ||
+      section == WebAssetSection.setupBranches ||
+      section == WebAssetSection.setupClassifications ||
+      section == WebAssetSection.setupCategories ||
+      section == WebAssetSection.setupSubCategories;
+
+  @override
+  void initState() {
+    super.initState();
+    expanded = _isSetup(widget.selected);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SetupSidebarGroup oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_isSetup(widget.selected) && !_isSetup(oldWidget.selected)) {
+      expanded = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _SidebarItem(
+          icon: Icons.tune_rounded,
+          label: 'Setup',
+          selected: false,
+          onTap: () => setState(() => expanded = !expanded),
+          trailing: AnimatedRotation(
+            turns: expanded ? .25 : 0,
+            duration: const Duration(milliseconds: 220),
+            child: const Icon(
+              Icons.chevron_right_rounded,
+              size: 19,
+              color: Colors.white70,
+            ),
+          ),
+        ),
+        ClipRect(
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: expanded
+                ? Column(
+                    children: [
+                      _SidebarSubItem(
+                        icon: Icons.add_box_outlined,
+                        label: 'Add Asset',
+                        selected:
+                            widget.selected == WebAssetSection.setupAssets,
+                        onTap: () =>
+                            widget.onSelected(WebAssetSection.setupAssets),
+                      ),
+                      _SidebarSubItem(
+                        icon: Icons.add_business_outlined,
+                        label: 'Add Branch',
+                        selected:
+                            widget.selected == WebAssetSection.setupBranches,
+                        onTap: () =>
+                            widget.onSelected(WebAssetSection.setupBranches),
+                      ),
+                      _SidebarSubItem(
+                        icon: Icons.security_outlined,
+                        label: 'Add Classification',
+                        selected:
+                            widget.selected ==
+                            WebAssetSection.setupClassifications,
+                        onTap: () => widget.onSelected(
+                          WebAssetSection.setupClassifications,
+                        ),
+                      ),
+                      _SidebarSubItem(
+                        icon: Icons.category_outlined,
+                        label: 'Add Category',
+                        selected:
+                            widget.selected == WebAssetSection.setupCategories,
+                        onTap: () =>
+                            widget.onSelected(WebAssetSection.setupCategories),
+                      ),
+                      _SidebarSubItem(
+                        icon: Icons.account_tree_outlined,
+                        label: 'Add Sub Category',
+                        selected:
+                            widget.selected ==
+                            WebAssetSection.setupSubCategories,
+                        onTap: () => widget.onSelected(
+                          WebAssetSection.setupSubCategories,
+                        ),
+                      ),
+                    ],
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _SidebarItem extends StatefulWidget {
   final IconData icon;
   final String label;
@@ -608,9 +888,10 @@ class _SidebarItemState extends State<_SidebarItem> {
                 ? const LinearGradient(
                     colors: [Color(0xFF294AEF), Color(0xFF00BDEB)],
                   )
-                : null,
-            color: !widget.selected && hovered
-                ? Colors.white.withValues(alpha: .075)
+                : hovered
+                ? const LinearGradient(
+                    colors: [Color(0x33294AEF), Color(0x3300BDEB)],
+                  )
                 : null,
             borderRadius: BorderRadius.circular(13),
             boxShadow: widget.selected
@@ -618,6 +899,15 @@ class _SidebarItemState extends State<_SidebarItem> {
                     BoxShadow(
                       color: Color(0x552358FF),
                       blurRadius: 20,
+                      offset: Offset(0, 7),
+                    ),
+                  ]
+                : hovered
+                ? const [
+                    BoxShadow(
+                      color: Color(0x5500BDEB),
+                      blurRadius: 22,
+                      spreadRadius: -5,
                       offset: Offset(0, 7),
                     ),
                   ]
@@ -669,49 +959,133 @@ class _SidebarItemState extends State<_SidebarItem> {
   }
 }
 
-class _SidebarSubItem extends StatelessWidget {
+class _SidebarSubItem extends StatefulWidget {
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final String? badge;
+  final Color badgeColor;
 
   const _SidebarSubItem({
     required this.icon,
     required this.label,
     required this.selected,
     required this.onTap,
+    this.badge,
+    this.badgeColor = AppColors.primaryColor,
   });
 
   @override
+  State<_SidebarSubItem> createState() => _SidebarSubItemState();
+}
+
+class _SidebarSubItemState extends State<_SidebarSubItem> {
+  bool hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        height: 38,
-        margin: const EdgeInsets.only(bottom: 3),
-        decoration: BoxDecoration(
-          color: selected
-              ? Colors.white.withValues(alpha: .1)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        padding: const EdgeInsets.only(left: 40, right: 14),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 17,
-              color: selected ? AppColors.cyan : Colors.white54,
-            ),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12.5,
-                color: selected ? Colors.white : Colors.white60,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => hovered = true),
+      onExit: (_) => setState(() => hovered = false),
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 190),
+          curve: Curves.easeOutCubic,
+          height: 38,
+          margin: const EdgeInsets.only(bottom: 3),
+          decoration: BoxDecoration(
+            gradient: widget.selected
+                ? LinearGradient(
+                    colors: [
+                      Colors.white.withValues(alpha: .13),
+                      AppColors.cyan.withValues(alpha: .09),
+                    ],
+                  )
+                : hovered
+                ? LinearGradient(
+                    colors: [
+                      AppColors.primaryColor.withValues(alpha: .18),
+                      AppColors.cyan.withValues(alpha: .13),
+                    ],
+                  )
+                : null,
+            border: hovered && !widget.selected
+                ? Border.all(color: AppColors.cyan.withValues(alpha: .22))
+                : null,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: hovered
+                ? [
+                    BoxShadow(
+                      color: AppColors.cyan.withValues(alpha: .22),
+                      blurRadius: 18,
+                      spreadRadius: -6,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : null,
+          ),
+          padding: const EdgeInsets.only(left: 40, right: 14),
+          child: Row(
+            children: [
+              Icon(
+                widget.icon,
+                size: 17,
+                color: widget.selected || hovered
+                    ? AppColors.cyan
+                    : Colors.white54,
               ),
-            ),
-          ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: widget.selected || hovered
+                        ? Colors.white
+                        : Colors.white60,
+                    fontWeight: hovered || widget.selected
+                        ? FontWeight.w600
+                        : FontWeight.w400,
+                  ),
+                ),
+              ),
+              if (widget.badge != null)
+                Container(
+                  constraints: const BoxConstraints(minWidth: 24),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: widget.badgeColor,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: hovered
+                        ? [
+                            BoxShadow(
+                              color: widget.badgeColor.withValues(alpha: .45),
+                              blurRadius: 10,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Text(
+                    widget.badge!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

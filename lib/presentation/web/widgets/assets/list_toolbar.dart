@@ -8,7 +8,8 @@ class _ListToolbar extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<String?> onStatusChanged;
   final VoidCallback onExport;
-  final bool showStatusAndExport;
+  final DateTimeRange? selectedDateRange;
+  final VoidCallback? onPickDateRange;
 
   const _ListToolbar({
     required this.searchController,
@@ -18,7 +19,8 @@ class _ListToolbar extends StatelessWidget {
     required this.onSearchChanged,
     required this.onStatusChanged,
     required this.onExport,
-    this.showStatusAndExport = true,
+    this.selectedDateRange,
+    this.onPickDateRange,
   });
 
   @override
@@ -27,7 +29,7 @@ class _ListToolbar extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
-          width: showStatusAndExport ? 195 : 280,
+          width: 195,
           child: TextField(
             controller: searchController,
             onChanged: onSearchChanged,
@@ -38,7 +40,7 @@ class _ListToolbar extends StatelessWidget {
             ),
           ),
         ),
-        if (showStatusAndExport) ...[
+        ...[
           const SizedBox(width: 8),
           SizedBox(
             width: 135,
@@ -83,6 +85,22 @@ class _ListToolbar extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           OutlinedButton.icon(
+            onPressed: onPickDateRange,
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              backgroundColor: selectedDateRange == null
+                  ? null
+                  : const Color(0xffedf4ff),
+            ),
+            icon: const Icon(Icons.date_range_outlined, size: 18),
+            label: Text(
+              selectedDateRange == null
+                  ? 'Date range'
+                  : '${_date(selectedDateRange!.start)} – ${_date(selectedDateRange!.end)}',
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
             onPressed: onExport,
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
@@ -94,4 +112,7 @@ class _ListToolbar extends StatelessWidget {
       ],
     );
   }
+
+  String _date(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}';
 }

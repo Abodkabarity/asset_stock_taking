@@ -36,6 +36,9 @@ class AssetExcelService {
       TextCellValue('description'),
       TextCellValue('has_warranty'),
       TextCellValue('warranty_description'),
+      TextCellValue('warranty_start_date'),
+      TextCellValue('warranty_end_date'),
+      TextCellValue('warranty_serial_no'),
       TextCellValue('warranty_image_url'),
       TextCellValue('cost'),
       TextCellValue('created_at'),
@@ -63,6 +66,9 @@ class AssetExcelService {
         TextCellValue(item.description),
         TextCellValue(item.hasWarranty.toString()),
         TextCellValue(item.warrantyDescription),
+        TextCellValue(item.warrantyStartDate),
+        TextCellValue(item.warrantyEndDate),
+        TextCellValue(item.warrantySerialNo),
         FormulaCellValue(
           'HYPERLINK("${item.warrantyImagePath ?? ''}", "Open Warranty")',
         ),
@@ -71,6 +77,53 @@ class AssetExcelService {
         if (includeProject) TextCellValue(item.projectName),
         FormulaCellValue('HYPERLINK("${item.imagePath ?? ''}", "Open Image")'),
       ]);
+    }
+
+    final headerStyle = CellStyle(
+      bold: true,
+      fontColorHex: ExcelColor.fromHexString('#FFFFFFFF'),
+      backgroundColorHex: ExcelColor.fromHexString('#FF1E4E8C'),
+      horizontalAlign: HorizontalAlign.Center,
+      verticalAlign: VerticalAlign.Center,
+      textWrapping: TextWrapping.WrapText,
+      bottomBorder: Border(
+        borderColorHex: ExcelColor.fromHexString('#FF163A69'),
+        borderStyle: BorderStyle.Medium,
+      ),
+    );
+    final bodyBorder = Border(
+      borderColorHex: ExcelColor.fromHexString('#FFD9E2F0'),
+      borderStyle: BorderStyle.Thin,
+    );
+    final columnCount = includeProject ? 23 : 22;
+    for (var column = 0; column < columnCount; column++) {
+      sheet.setColumnWidth(column, column == 0 || column == 12 ? 28 : 18);
+      sheet
+              .cell(
+                CellIndex.indexByColumnRow(columnIndex: column, rowIndex: 0),
+              )
+              .cellStyle =
+          headerStyle;
+    }
+    for (var row = 1; row <= assets.length; row++) {
+      final isAlternate = row.isEven;
+      for (var column = 0; column < columnCount; column++) {
+        sheet
+            .cell(
+              CellIndex.indexByColumnRow(columnIndex: column, rowIndex: row),
+            )
+            .cellStyle = CellStyle(
+          backgroundColorHex: ExcelColor.fromHexString(
+            isAlternate ? '#FFF5F9FF' : '#FFFFFFFF',
+          ),
+          topBorder: bodyBorder,
+          bottomBorder: bodyBorder,
+          leftBorder: bodyBorder,
+          rightBorder: bodyBorder,
+          verticalAlign: VerticalAlign.Center,
+          textWrapping: TextWrapping.WrapText,
+        );
+      }
     }
 
     /// =========================

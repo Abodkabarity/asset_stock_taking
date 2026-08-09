@@ -4,13 +4,13 @@ class _TransferHeroCard extends StatelessWidget {
   final String title;
   final int totalAssets;
   final String? selectedBranch;
-  final VoidCallback onExport;
+  final VoidCallback onSelectAssets;
 
   const _TransferHeroCard({
     required this.title,
     required this.totalAssets,
     required this.selectedBranch,
-    required this.onExport,
+    required this.onSelectAssets,
   });
 
   @override
@@ -19,7 +19,7 @@ class _TransferHeroCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(26),
       child: Container(
         width: double.infinity,
-        constraints: const BoxConstraints(minHeight: 178),
+        constraints: const BoxConstraints(minHeight: 136),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
@@ -40,6 +40,7 @@ class _TransferHeroCard extends StatelessWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(26),
           child: Stack(
+            alignment: Alignment.centerLeft,
             children: [
               Positioned(
                 right: -90,
@@ -79,8 +80,8 @@ class _TransferHeroCard extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 28,
-                  vertical: 27,
+                  horizontal: 24,
+                  vertical: 18,
                 ),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -90,11 +91,11 @@ class _TransferHeroCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          width: 66,
-                          height: 66,
+                          width: 54,
+                          height: 54,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.13),
-                            borderRadius: BorderRadius.circular(19),
+                            borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: Colors.white.withValues(alpha: 0.17),
                             ),
@@ -109,10 +110,10 @@ class _TransferHeroCard extends StatelessWidget {
                           child: const Icon(
                             Icons.compare_arrows_rounded,
                             color: Colors.white,
-                            size: 33,
+                            size: 27,
                           ),
                         ),
-                        const SizedBox(width: 18),
+                        const SizedBox(width: 15),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -126,7 +127,7 @@ class _TransferHeroCard extends StatelessWidget {
                                     title,
                                     style: const TextStyle(
                                       color: Colors.white,
-                                      fontSize: 27,
+                                      fontSize: 22,
                                       height: 1.15,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: -0.7,
@@ -159,24 +160,24 @@ class _TransferHeroCard extends StatelessWidget {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 9),
+                              const SizedBox(height: 6),
                               const Text(
                                 'Move assets between branches and sites with a clear, '
                                 'organized transfer workflow and better visibility.',
                                 style: TextStyle(
                                   color: Color(0xffd9e8f8),
-                                  fontSize: 13,
-                                  height: 1.5,
+                                  fontSize: 12,
+                                  height: 1.35,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              const SizedBox(height: 13),
+                              const SizedBox(height: 8),
                               Row(
                                 children: [
                                   const Icon(
                                     Icons.location_on_outlined,
                                     color: Color(0xff9fd8ff),
-                                    size: 17,
+                                    size: 15,
                                   ),
                                   const SizedBox(width: 6),
                                   Flexible(
@@ -186,7 +187,7 @@ class _TransferHeroCard extends StatelessWidget {
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         color: Color(0xffd9e8f8),
-                                        fontSize: 12,
+                                        fontSize: 11.5,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
@@ -205,10 +206,10 @@ class _TransferHeroCard extends StatelessWidget {
                       alignment: WrapAlignment.end,
                       children: [
                         _MaintenanceHeroButton(
-                          icon: Icons.file_download_outlined,
-                          label: 'Export',
-                          filled: false,
-                          onTap: onExport,
+                          icon: Icons.add_box_outlined,
+                          label: 'Select Asset',
+                          filled: true,
+                          onTap: onSelectAssets,
                         ),
                       ],
                     );
@@ -218,7 +219,7 @@ class _TransferHeroCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           information,
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
                           actions,
                         ],
                       );
@@ -735,4 +736,292 @@ class _TransferEmptyState extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TransferHistoryTableHeader extends StatelessWidget {
+  const _TransferHistoryTableHeader();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 48,
+    padding: const EdgeInsets.symmetric(horizontal: 15),
+    decoration: BoxDecoration(
+      color: const Color(0xfff1f5fb),
+      borderRadius: BorderRadius.circular(13),
+      border: Border.all(color: const Color(0xffdfe7f2)),
+    ),
+    child: const Row(
+      children: [
+        Expanded(flex: 3, child: _ModernTransferHeaderText('Asset')),
+        Expanded(flex: 2, child: _ModernTransferHeaderText('From Branch')),
+        SizedBox(width: 52),
+        Expanded(flex: 2, child: _ModernTransferHeaderText('To Branch')),
+        Expanded(flex: 2, child: _ModernTransferHeaderText('Moved On')),
+        Expanded(flex: 3, child: _ModernTransferHeaderText('Movement')),
+      ],
+    ),
+  );
+}
+
+class _TransferHistoryRow extends StatefulWidget {
+  final Map<String, dynamic> record;
+  final AssetStockModel? asset;
+
+  const _TransferHistoryRow({required this.record, required this.asset});
+
+  @override
+  State<_TransferHistoryRow> createState() => _TransferHistoryRowState();
+}
+
+class _TransferHistoryRowState extends State<_TransferHistoryRow> {
+  bool hovered = false;
+
+  String _value(String key) => widget.record[key]?.toString().trim() ?? '';
+
+  String get _dateLabel {
+    final value = DateTime.tryParse(_value('created_at'))?.toLocal();
+    if (value == null) return '-';
+    return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year} '
+        '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final itemCode = _value('item_code');
+    final from = _value('from_branch');
+    final to = _value('to_branch');
+    final description = _value('description');
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => hovered = true),
+      onExit: (_) => setState(() => hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+        decoration: BoxDecoration(
+          color: hovered ? const Color(0xfff7faff) : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: hovered ? const Color(0xffb9ccef) : const Color(0xffedf1f6),
+          ),
+          boxShadow: hovered
+              ? [
+                  BoxShadow(
+                    color: const Color(0xff294f87).withValues(alpha: .07),
+                    blurRadius: 20,
+                    spreadRadius: -8,
+                    offset: const Offset(0, 9),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Row(
+                children: [
+                  _AssetImage(path: widget.asset?.imagePath ?? ''),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.asset?.name.trim().isNotEmpty == true
+                              ? widget.asset!.name
+                              : 'Asset',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xff24324a),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          itemCode,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xff2664c7),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(flex: 2, child: _TransferLocationCell(value: from)),
+            const SizedBox(
+              width: 52,
+              child: Icon(
+                Icons.arrow_forward_rounded,
+                color: Color(0xff4263eb),
+                size: 20,
+              ),
+            ),
+            Expanded(flex: 2, child: _TransferLocationCell(value: to)),
+            Expanded(
+              flex: 2,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.schedule_rounded,
+                    size: 15,
+                    color: Color(0xff94a0b2),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      _dateLabel,
+                      style: const TextStyle(
+                        color: Color(0xff59687f),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 3,
+              child: Text(
+                description.isEmpty
+                    ? 'Transferred from $from to $to'
+                    : description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xff6d7a8e),
+                  fontSize: 11,
+                  height: 1.35,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TransferLocationCell extends StatelessWidget {
+  final String value;
+
+  const _TransferLocationCell({required this.value});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: const Color(0xffedf4ff),
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: const Icon(
+          Icons.location_on_outlined,
+          size: 16,
+          color: Color(0xff4263eb),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(
+          value.isEmpty ? '-' : value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xff46546b),
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+class _TransferHistoryEmptyState extends StatelessWidget {
+  final bool hasSearch;
+  final VoidCallback onSelectAsset;
+
+  const _TransferHistoryEmptyState({
+    required this.hasSearch,
+    required this.onSelectAsset,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    constraints: const BoxConstraints(minHeight: 260),
+    margin: const EdgeInsets.only(top: 10),
+    decoration: BoxDecoration(
+      color: const Color(0xfffbfcfe),
+      borderRadius: BorderRadius.circular(17),
+      border: Border.all(color: const Color(0xffe6ebf2)),
+    ),
+    child: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: const Color(0xffedf4ff),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xffd4e1ff)),
+            ),
+            child: Icon(
+              hasSearch ? Icons.search_off_rounded : Icons.swap_horiz_rounded,
+              color: const Color(0xff4263eb),
+              size: 34,
+            ),
+          ),
+          const SizedBox(height: 15),
+          Text(
+            hasSearch
+                ? 'No matching movements found'
+                : 'No completed transfers yet',
+            style: const TextStyle(
+              color: Color(0xff26354d),
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            hasSearch
+                ? 'Try another asset, tag ID or branch.'
+                : 'Select an asset to create the first movement record.',
+            style: const TextStyle(color: Color(0xff8b98aa), fontSize: 12),
+          ),
+          if (!hasSearch) ...[
+            const SizedBox(height: 15),
+            ElevatedButton.icon(
+              onPressed: onSelectAsset,
+              icon: const Icon(Icons.add_box_outlined, color: Colors.white),
+              label: const Text(
+                'Select Asset',
+                style: TextStyle(color: Colors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xff4263eb),
+              ),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
 }

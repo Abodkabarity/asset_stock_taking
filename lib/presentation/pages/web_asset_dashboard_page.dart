@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:printing/printing.dart';
 
 import '../../core/constants/app_colors.dart';
@@ -14,6 +17,7 @@ import '../web/utils/web_asset_colors.dart';
 import '../web/utils/web_dropdown_options.dart';
 import '../web/widgets/web_asset_quick_view_dialog.dart';
 import '../web/widgets/web_hover_surface.dart';
+import '../web/widgets/common/web_single_date_picker.dart';
 
 part '../web/pages/dispose/web_dispose_page.dart';
 part '../web/pages/alerts/web_alerts_page.dart';
@@ -22,6 +26,9 @@ part '../web/pages/dashboard/web_dashboard_overview.dart';
 part '../web/pages/inventory/web_inventory_page.dart';
 part '../web/pages/maintenance/web_maintenance_page.dart';
 part '../web/pages/transfer/web_transfer_page.dart';
+part '../web/pages/checkout/web_checkout_page.dart';
+part '../web/pages/reserve/web_reserve_page.dart';
+part '../web/pages/setup/web_setup_page.dart';
 part '../web/widgets/assets/asset_registry_empty_state.dart';
 part '../web/widgets/assets/asset_registry_header.dart';
 part '../web/widgets/assets/asset_registry_recent.dart';
@@ -30,6 +37,7 @@ part '../web/widgets/assets/asset_registry_table.dart';
 part '../web/widgets/assets/asset_registry_toolbar.dart';
 part '../web/widgets/assets/asset_picker_widgets.dart';
 part '../web/widgets/assets/list_toolbar.dart';
+part '../web/widgets/assets/web_date_range_picker.dart';
 part '../web/widgets/alerts/alert_widgets.dart';
 part '../web/widgets/common/asset_table_widgets.dart';
 part '../web/widgets/common/detail_widgets.dart';
@@ -46,6 +54,7 @@ part '../web/widgets/dispose/dispose_widgets.dart';
 part '../web/widgets/maintenance/maintenance_widgets.dart';
 part '../web/widgets/shell/dashboard_shell_widgets.dart';
 part '../web/widgets/transfer/transfer_widgets.dart';
+part '../web/widgets/setup/setup_widgets.dart';
 
 enum WebAssetSection {
   dashboard,
@@ -55,6 +64,21 @@ enum WebAssetSection {
   transfer,
   dispose,
   maintenance,
+  checkout,
+  checkin,
+  reserve,
+  setupAssets,
+  setupBranches,
+  setupClassifications,
+  setupCategories,
+  setupSubCategories,
+}
+
+enum WebAlertView {
+  checkoutDue,
+  maintenanceDue,
+  maintenanceOverdue,
+  warrantyExpiry,
 }
 
 class WebAssetDashboardPage extends StatefulWidget {
@@ -91,11 +115,22 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   List<String> branches = [];
   List<Map<String, dynamic>> maintenanceAlerts = [];
   List<Map<String, dynamic>> maintenanceRecords = [];
+  List<Map<String, dynamic>> activeCheckouts = [];
+  List<Map<String, dynamic>> checkoutPeople = [];
+  List<Map<String, dynamic>> activeReservations = [];
+  List<Map<String, dynamic>> transferRecords = [];
+  List<Map<String, dynamic>> masterAssetRows = [];
+  List<Map<String, dynamic>> branchRows = [];
+  List<Map<String, dynamic>> setupOptionRows = [];
+  List<String> departments = [];
   String? selectedBranch;
   String searchQuery = '';
   String? selectedStatus;
+  DateTimeRange? selectedDateRange;
   String alertSearchQuery = '';
   String alertUrgencyFilter = 'All';
+  WebAlertView selectedAlertView = WebAlertView.maintenanceDue;
+  final Set<String> _seenAlertKeys = <String>{};
   DateTime alertMonth = DateTime(DateTime.now().year, DateTime.now().month);
   AssetStockModel? selectedMaintenanceAsset;
   AssetStockModel? selectedDetailAsset;
@@ -109,6 +144,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   bool sectionLoading = false;
   WebAssetSection? pendingSection;
   final Map<WebAssetSection, int> _sectionPages = {};
+  Timer? _registrySearchDebounce;
 
   void _updateWebState(VoidCallback update) => setState(update);
 
@@ -116,6 +152,12 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   void initState() {
     super.initState();
     selectedSection = widget.initialSection;
+    final storedSeenAlerts = Hive.box(
+      'settings_box',
+    ).get('web_seen_alert_keys');
+    if (storedSeenAlerts is List) {
+      _seenAlertKeys.addAll(storedSeenAlerts.map((key) => key.toString()));
+    }
     _loadData();
   }
 
@@ -133,6 +175,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     disposeDateController.dispose();
     disposeToController.dispose();
     disposeNotesController.dispose();
+    _registrySearchDebounce?.cancel();
     super.dispose();
   }
 
@@ -143,8 +186,6 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
 
     final branchesFuture = webRepository.getBranches();
     final assetsFuture = webRepository.getAssets();
-    final alertsFuture = webRepository.getMaintenanceAlertsWithinDays();
-    final recordsFuture = webRepository.getMaintenanceRecords();
 
     final loadedBranches = await branchesFuture;
     final loadedAssets = await assetsFuture;
@@ -158,18 +199,63 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       loading = false;
     });
 
+    // Load workflow and setup data after the critical registry payload. This
+    // keeps Supabase connection slots free for the first meaningful paint.
+    final alertsFuture = webRepository.getMaintenanceAlertsWithinDays();
+    final recordsFuture = webRepository.getMaintenanceRecords();
+    final checkoutsFuture = webRepository.getActiveCheckouts();
+    final peopleFuture = webRepository.getPeople();
+    final reservationsFuture = webRepository.getActiveReservations();
+    final departmentsFuture = webRepository.getDepartments();
+    final transferRecordsFuture = webRepository.getTransferActivityLogs();
+    final masterAssetRowsFuture = webRepository.getMasterAssetRows();
+    final branchRowsFuture = webRepository.getBranchRows();
+    final setupOptionRowsFuture = webRepository.getSetupOptionRows();
+
     final loadedAlerts = await alertsFuture;
     final loadedRecords = await recordsFuture;
+    final loadedCheckouts = await checkoutsFuture;
+    final loadedPeople = await peopleFuture;
+    final loadedReservations = await reservationsFuture;
+    final loadedDepartments = await departmentsFuture;
+    final loadedTransferRecords = await transferRecordsFuture;
+    final loadedMasterAssetRows = await masterAssetRowsFuture;
+    final loadedBranchRows = await branchRowsFuture;
+    final loadedSetupOptionRows = await setupOptionRowsFuture;
 
     if (!mounted) return;
     setState(() {
       maintenanceAlerts = loadedAlerts;
       maintenanceRecords = loadedRecords;
+      activeCheckouts = loadedCheckouts;
+      checkoutPeople = loadedPeople;
+      activeReservations = loadedReservations;
+      departments = loadedDepartments;
+      transferRecords = loadedTransferRecords;
+      masterAssetRows = loadedMasterAssetRows;
+      branchRows = loadedBranchRows;
+      setupOptionRows = loadedSetupOptionRows;
     });
+    if (selectedSection == WebAssetSection.alerts) {
+      final keys = _alertEntriesFor(selectedAlertView)
+          .where((entry) => _alertDaysFromToday(entry.date) <= 7)
+          .map(_alertEntryKey)
+          .toSet();
+      setState(() => _seenAlertKeys.addAll(keys));
+      unawaited(
+        Hive.box(
+          'settings_box',
+        ).put('web_seen_alert_keys', _seenAlertKeys.toList(growable: false)),
+      );
+    }
   }
 
-  Future<void> _selectSection(WebAssetSection section) async {
+  void _selectSection(WebAssetSection section) {
     if (sectionLoading) return;
+    if (section == WebAssetSection.alerts) {
+      _selectAlertView(selectedAlertView);
+      return;
+    }
     if (section == selectedSection) {
       if (selectedDetailAsset != null ||
           addingAsset ||
@@ -188,9 +274,11 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     }
 
     setState(() {
-      sectionLoading = true;
-      pendingSection = section;
+      selectedSection = section;
+      sectionLoading = false;
+      pendingSection = null;
       selectedStatus = null;
+      selectedDateRange = null;
       selectedDetailAsset = null;
       editingAsset = null;
       detailReturnAfterEdit = null;
@@ -198,22 +286,27 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       addingInventory = false;
       searchQuery = '';
       searchController.clear();
-    });
-    await WidgetsBinding.instance.endOfFrame;
-
-    if (!mounted) return;
-    setState(() {
-      selectedSection = section;
       _sectionPages[section] = 0;
     });
-    await Future<void>.delayed(const Duration(milliseconds: 120));
-
-    if (!mounted) return;
-    setState(() {
-      sectionLoading = false;
-      pendingSection = null;
-    });
     _scrollContentToTop();
+  }
+
+  void _queueRegistrySearch(String value, WebAssetSection section) {
+    _registrySearchDebounce?.cancel();
+    if (value.isEmpty) {
+      _updateWebState(() {
+        searchQuery = '';
+        _resetPage(section);
+      });
+      return;
+    }
+    _registrySearchDebounce = Timer(const Duration(milliseconds: 140), () {
+      if (!mounted) return;
+      _updateWebState(() {
+        searchQuery = value;
+        _resetPage(section);
+      });
+    });
   }
 
   int _pageFor(WebAssetSection section) => _sectionPages[section] ?? 0;
@@ -250,11 +343,13 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   void _scrollContentToTop() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!contentScrollController.hasClients) return;
-      contentScrollController.animateTo(
-        contentScrollController.position.minScrollExtent,
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-      );
+      for (final position in contentScrollController.positions) {
+        position.animateTo(
+          position.minScrollExtent,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+        );
+      }
     });
   }
 
@@ -264,6 +359,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     return assets.where((asset) {
       return _matchesBranchAndSearch(asset, search) &&
           _matchesSelectedStatus(asset) &&
+          _matchesSelectedDateRange(asset) &&
           _isRegularAsset(asset);
     }).toList();
   }
@@ -274,6 +370,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     return assets.where((asset) {
       return _matchesBranchAndSearch(asset, search) &&
           _matchesSelectedStatus(asset) &&
+          _matchesSelectedDateRange(asset) &&
           _isInventoryAsset(asset);
     }).toList();
   }
@@ -287,6 +384,35 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   bool _matchesSelectedStatus(AssetStockModel asset) {
     return selectedStatus == null ||
         asset.status.trim().toLowerCase() == selectedStatus!.toLowerCase();
+  }
+
+  bool _matchesSelectedDateRange(AssetStockModel asset) {
+    final range = selectedDateRange;
+    if (range == null) return true;
+    final date = DateTime(
+      asset.createdAt.year,
+      asset.createdAt.month,
+      asset.createdAt.day,
+    );
+    final start = DateTime(
+      range.start.year,
+      range.start.month,
+      range.start.day,
+    );
+    final end = DateTime(range.end.year, range.end.month, range.end.day);
+    return !date.isBefore(start) && !date.isAfter(end);
+  }
+
+  Future<void> _pickAssetDateRange() async {
+    final result = await showWebDateRangePicker(
+      context: context,
+      initialRange: selectedDateRange,
+    );
+    if (result == null || !mounted) return;
+    _updateWebState(() {
+      selectedDateRange = result;
+      _resetPage(selectedSection);
+    });
   }
 
   bool _matchesSearch(AssetStockModel asset, String search) {
@@ -311,6 +437,13 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     return status != 'disposed' &&
         status != 'maintenance' &&
         registerType == 'asset';
+  }
+
+  bool _isOperationallyAvailable(AssetStockModel asset) {
+    final status = asset.status.trim().toLowerCase();
+    return _isRegularAsset(asset) &&
+        status != 'checked out' &&
+        status != 'reserved';
   }
 
   double get totalValue {
@@ -338,7 +471,32 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   int get alertCount {
-    return maintenanceAlerts.length;
+    return _alertUnreadCounts.values.fold<int>(0, (sum, count) => sum + count);
+  }
+
+  void _selectAlertView(WebAlertView view) {
+    final keys = _alertEntriesFor(view)
+        .where((entry) => _alertDaysFromToday(entry.date) <= 7)
+        .map(_alertEntryKey)
+        .toSet();
+    setState(() {
+      selectedSection = WebAssetSection.alerts;
+      selectedAlertView = view;
+      selectedDetailAsset = null;
+      editingAsset = null;
+      addingAsset = false;
+      addingInventory = false;
+      alertSearchQuery = '';
+      alertSearchController.clear();
+      _sectionPages[WebAssetSection.alerts] = 0;
+      _seenAlertKeys.addAll(keys);
+    });
+    unawaited(
+      Hive.box(
+        'settings_box',
+      ).put('web_seen_alert_keys', _seenAlertKeys.toList(growable: false)),
+    );
+    _scrollContentToTop();
   }
 
   void _addAsset() {
@@ -963,6 +1121,18 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   Future<void> _transferAsset(AssetStockModel asset) async {
+    if (asset.status.trim().toLowerCase() == 'reserved') {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'This asset is reserved. Use Reserve > Transfer or Unreserve first.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     String branch = selectedBranch ?? asset.location;
 
     if (!mounted) return;
@@ -1060,6 +1230,17 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     await _loadData();
   }
 
+  Future<void> _openTransferAssetPicker() async {
+    final picked = await _showAssetSearchPicker(
+      actionLabel: 'Continue to Transfer',
+    );
+    if (picked == null || picked.isEmpty) return;
+    for (final asset in picked) {
+      if (!mounted) return;
+      await _transferAsset(asset);
+    }
+  }
+
   Future<void> _disposeAsset(AssetStockModel asset) async {
     await webRepository.updateStatus(
       itemCode: asset.itemCode,
@@ -1147,7 +1328,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       context: context,
       barrierDismissible: false,
       builder: (context) => _MultiAssetSearchDialog(
-        assets: assets.where(_isRegularAsset).toList(growable: false),
+        assets: assets.where(_isOperationallyAvailable).toList(growable: false),
         branches: branches,
         initialBranch: selectedBranch,
         actionLabel: actionLabel,
@@ -1411,24 +1592,11 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
         }
       }
     }
-    final picked = await showDatePicker(
+    final picked = await showWebSingleDatePicker(
       context: context,
       initialDate: initialDate ?? now,
       firstDate: DateTime(2020),
       lastDate: DateTime(now.year + 20),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.primaryColor,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: AppColors.headerText,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (picked == null) return;
@@ -1483,6 +1651,9 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
               _Sidebar(
                 section: selectedSection,
                 alertCount: alertCount,
+                selectedAlertView: selectedAlertView,
+                alertUnreadCounts: _alertUnreadCounts,
+                onAlertSelected: _selectAlertView,
                 onSelected: _selectSection,
                 onAddAsset: _addAsset,
                 onAddInventory: _addInventory,
@@ -1520,6 +1691,15 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                         duration: const Duration(milliseconds: 180),
                         switchInCurve: Curves.easeOut,
                         switchOutCurve: Curves.easeIn,
+                        // Do not retain the outgoing scroll view: both pages
+                        // share the dashboard controller and attaching it to
+                        // two scrollables causes ScrollController.position to
+                        // assert during fast section transitions.
+                        layoutBuilder: (currentChild, previousChildren) =>
+                            Align(
+                              alignment: Alignment.topLeft,
+                              child: currentChild ?? const SizedBox.shrink(),
+                            ),
                         child: loading || sectionLoading
                             ? _WebLoadingView(
                                 key: const ValueKey('web-loading'),
@@ -1545,7 +1725,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                                 controller: contentScrollController,
                                 padding: const EdgeInsets.fromLTRB(
                                   26,
-                                  24,
+                                  20,
                                   26,
                                   34,
                                 ),
@@ -1587,6 +1767,22 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
         return 'Disposed Assets';
       case WebAssetSection.maintenance:
         return 'Maintenance';
+      case WebAssetSection.checkout:
+        return 'Check Out';
+      case WebAssetSection.checkin:
+        return 'Check In';
+      case WebAssetSection.reserve:
+        return 'Reserve';
+      case WebAssetSection.setupAssets:
+        return 'Asset Master';
+      case WebAssetSection.setupBranches:
+        return 'Branches';
+      case WebAssetSection.setupClassifications:
+        return 'Classifications';
+      case WebAssetSection.setupCategories:
+        return 'Categories';
+      case WebAssetSection.setupSubCategories:
+        return 'Sub Categories';
     }
   }
 
@@ -1647,18 +1843,42 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       case WebAssetSection.alerts:
         return _alertsPanel();
       case WebAssetSection.transfer:
-        return _operationPanel(
-          title: 'Transfer / Move',
-          icon: Icons.open_with,
-          description: 'Move an asset from one location to another.',
-          actionLabel: 'Transfer',
-          actionIcon: Icons.swap_horiz,
-          onAction: _transferAsset,
-        );
+        return _transferPanel();
       case WebAssetSection.dispose:
         return _disposePanel();
       case WebAssetSection.maintenance:
         return _maintenancePanel();
+      case WebAssetSection.checkout:
+        return _checkoutPanel();
+      case WebAssetSection.checkin:
+        return _checkinPanel();
+      case WebAssetSection.reserve:
+        return _reservePanel();
+      case WebAssetSection.setupAssets:
+        return _setupAssetsPanel();
+      case WebAssetSection.setupBranches:
+        return _setupBranchesPanel();
+      case WebAssetSection.setupClassifications:
+        return _setupOptionPanel(
+          optionType: 'classification',
+          title: 'Classifications',
+          singular: 'Classification',
+          icon: Icons.security_outlined,
+        );
+      case WebAssetSection.setupCategories:
+        return _setupOptionPanel(
+          optionType: 'category',
+          title: 'Categories',
+          singular: 'Category',
+          icon: Icons.category_outlined,
+        );
+      case WebAssetSection.setupSubCategories:
+        return _setupOptionPanel(
+          optionType: 'sub_category',
+          title: 'Sub Categories',
+          singular: 'Sub Category',
+          icon: Icons.account_tree_outlined,
+        );
       case WebAssetSection.dashboard:
         return _dashboard();
     }

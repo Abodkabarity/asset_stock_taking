@@ -55,15 +55,15 @@ class _LargeAssetImage extends StatelessWidget {
       child: hasImage
           ? Image.network(
               path!,
-              width: 38,
-              height: 38,
-              cacheWidth: 96,
+              width: double.infinity,
+              height: 150,
+              cacheWidth: 640,
               fit: BoxFit.cover,
-              filterQuality: FilterQuality.low,
+              filterQuality: FilterQuality.medium,
               errorBuilder: (_, _, _) => const Icon(
                 Icons.broken_image_outlined,
                 color: AppColors.subText,
-                size: 20,
+                size: 34,
               ),
             )
           : const Icon(

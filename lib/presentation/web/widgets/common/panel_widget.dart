@@ -4,8 +4,14 @@ class _Panel extends StatelessWidget {
   final String title;
   final Widget child;
   final Widget? trailing;
+  final bool expandChild;
 
-  const _Panel({required this.title, required this.child, this.trailing});
+  const _Panel({
+    required this.title,
+    required this.child,
+    this.trailing,
+    this.expandChild = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +66,12 @@ class _Panel extends StatelessWidget {
             ),
           if (title.isNotEmpty || trailing != null)
             const Divider(height: 1, color: AppColors.border),
-          Padding(padding: const EdgeInsets.all(20), child: child),
+          if (expandChild)
+            Expanded(
+              child: Padding(padding: const EdgeInsets.all(20), child: child),
+            )
+          else
+            Padding(padding: const EdgeInsets.all(20), child: child),
         ],
       ),
     );

@@ -9,6 +9,9 @@ class _AssetRegistryToolbar extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<String?> onStatusChanged;
   final VoidCallback onClearFilters;
+  final DateTimeRange? selectedDateRange;
+  final VoidCallback onPickDateRange;
+  final bool inventoryMode;
 
   const _AssetRegistryToolbar({
     required this.searchController,
@@ -19,6 +22,9 @@ class _AssetRegistryToolbar extends StatelessWidget {
     required this.onSearchChanged,
     required this.onStatusChanged,
     required this.onClearFilters,
+    required this.selectedDateRange,
+    required this.onPickDateRange,
+    this.inventoryMode = false,
   });
 
   @override
@@ -34,7 +40,9 @@ class _AssetRegistryToolbar extends StatelessWidget {
         controller: searchController,
         onChanged: onSearchChanged,
         decoration: InputDecoration(
-          hintText: 'Search asset name, tag ID, category, brand or location',
+          hintText: inventoryMode
+              ? 'Search inventory name, tag ID, category, brand or location'
+              : 'Search asset name, tag ID, category, brand or location',
           hintStyle: const TextStyle(
             color: Color(0xff909caf),
             fontSize: 12.5,
@@ -167,6 +175,29 @@ class _AssetRegistryToolbar extends StatelessWidget {
       ),
     );
 
+    final dateFilter = OutlinedButton.icon(
+      onPressed: onPickDateRange,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 50),
+        padding: const EdgeInsets.symmetric(horizontal: 13),
+        side: BorderSide(
+          color: selectedDateRange == null
+              ? const Color(0xffdfe7f2)
+              : const Color(0xff9fc5ff),
+        ),
+        backgroundColor: selectedDateRange == null
+            ? const Color(0xfff8fafd)
+            : const Color(0xffedf4ff),
+      ),
+      icon: const Icon(Icons.date_range_outlined, size: 18),
+      label: Text(
+        selectedDateRange == null
+            ? 'Date range'
+            : '${_dateLabel(selectedDateRange!.start)} – ${_dateLabel(selectedDateRange!.end)}',
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+      ),
+    );
+
     final clearButton = Tooltip(
       message: 'Clear filters',
       child: Material(
@@ -231,9 +262,13 @@ class _AssetRegistryToolbar extends StatelessWidget {
             resultBox,
             const SizedBox(width: 9),
             clearButton,
+            Offstage(child: dateFilter),
           ],
         );
       },
     );
   }
+
+  String _dateLabel(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
 }

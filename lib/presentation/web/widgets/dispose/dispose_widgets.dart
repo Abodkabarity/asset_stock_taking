@@ -19,7 +19,7 @@ class _DisposedHeroCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(26),
       child: Container(
         width: double.infinity,
-        constraints: const BoxConstraints(minHeight: 178),
+        constraints: const BoxConstraints(minHeight: 136),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
@@ -40,6 +40,7 @@ class _DisposedHeroCard extends StatelessWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(26),
           child: Stack(
+            alignment: Alignment.centerLeft,
             children: [
               Positioned(
                 right: -90,
@@ -80,8 +81,8 @@ class _DisposedHeroCard extends StatelessWidget {
 
               Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 28,
-                  vertical: 27,
+                  horizontal: 24,
+                  vertical: 18,
                 ),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -91,11 +92,11 @@ class _DisposedHeroCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          width: 66,
-                          height: 66,
+                          width: 54,
+                          height: 54,
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.13),
-                            borderRadius: BorderRadius.circular(19),
+                            borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: Colors.white.withValues(alpha: 0.17),
                             ),
@@ -110,10 +111,10 @@ class _DisposedHeroCard extends StatelessWidget {
                           child: const Icon(
                             Icons.inventory_2_outlined,
                             color: Colors.white,
-                            size: 32,
+                            size: 27,
                           ),
                         ),
-                        const SizedBox(width: 18),
+                        const SizedBox(width: 15),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,7 +128,7 @@ class _DisposedHeroCard extends StatelessWidget {
                                     'Disposal Center',
                                     style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 27,
+                                      fontSize: 22,
                                       height: 1.15,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: -0.7,
@@ -160,24 +161,24 @@ class _DisposedHeroCard extends StatelessWidget {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 9),
+                              const SizedBox(height: 6),
                               const Text(
                                 'Maintain a clear disposal register, document '
                                 'asset retirement and preserve a complete audit trail.',
                                 style: TextStyle(
                                   color: Color(0xffd9e8f8),
-                                  fontSize: 13,
-                                  height: 1.5,
+                                  fontSize: 12,
+                                  height: 1.35,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                              const SizedBox(height: 13),
+                              const SizedBox(height: 8),
                               Row(
                                 children: [
                                   const Icon(
                                     Icons.location_on_outlined,
                                     color: Color(0xff9fd8ff),
-                                    size: 17,
+                                    size: 15,
                                   ),
                                   const SizedBox(width: 6),
                                   Flexible(
@@ -187,7 +188,7 @@ class _DisposedHeroCard extends StatelessWidget {
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         color: Color(0xffd9e8f8),
-                                        fontSize: 12,
+                                        fontSize: 11.5,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
@@ -225,7 +226,7 @@ class _DisposedHeroCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           information,
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
                           actions,
                         ],
                       );

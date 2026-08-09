@@ -189,7 +189,20 @@ class _AssetImage extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: hasImage
-          ? Image.network(path!, fit: BoxFit.cover)
+          ? Image.network(
+              path!,
+              width: 38,
+              height: 38,
+              fit: BoxFit.cover,
+              cacheWidth: 96,
+              cacheHeight: 96,
+              filterQuality: FilterQuality.low,
+              errorBuilder: (_, _, _) => const Icon(
+                Icons.broken_image_outlined,
+                color: AppColors.subText,
+                size: 20,
+              ),
+            )
           : const Icon(
               Icons.inventory_2_outlined,
               color: AppColors.primaryColor,

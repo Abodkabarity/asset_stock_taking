@@ -5,12 +5,14 @@ class _AssetRegistrySummaryStrip extends StatelessWidget {
   final double totalValue;
   final int locationsCount;
   final int categoriesCount;
+  final bool inventoryMode;
 
   const _AssetRegistrySummaryStrip({
     required this.totalAssets,
     required this.totalValue,
     required this.locationsCount,
     required this.categoriesCount,
+    this.inventoryMode = false,
   });
 
   @override
@@ -19,14 +21,14 @@ class _AssetRegistrySummaryStrip extends StatelessWidget {
       _AssetRegistryMetricData(
         icon: Icons.widgets_outlined,
         color: const Color(0xff4263eb),
-        label: 'Visible Assets',
+        label: inventoryMode ? 'Visible Inventory' : 'Visible Assets',
         value: totalAssets.toString(),
         caption: 'Current filtered scope',
       ),
       _AssetRegistryMetricData(
         icon: Icons.payments_outlined,
         color: const Color(0xff0f9f8f),
-        label: 'Asset Value',
+        label: inventoryMode ? 'Inventory Value' : 'Asset Value',
         value: totalValue.toStringAsFixed(2),
         caption: 'Total value in AED',
       ),
@@ -35,14 +37,18 @@ class _AssetRegistrySummaryStrip extends StatelessWidget {
         color: const Color(0xfff59f00),
         label: 'Locations',
         value: locationsCount.toString(),
-        caption: 'Distinct asset locations',
+        caption: inventoryMode
+            ? 'Distinct inventory locations'
+            : 'Distinct asset locations',
       ),
       _AssetRegistryMetricData(
         icon: Icons.category_outlined,
         color: const Color(0xff7950f2),
         label: 'Categories',
         value: categoriesCount.toString(),
-        caption: 'Asset category groups',
+        caption: inventoryMode
+            ? 'Inventory category groups'
+            : 'Asset category groups',
       ),
     ];
 

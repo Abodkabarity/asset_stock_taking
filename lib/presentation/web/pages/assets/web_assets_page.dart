@@ -1,9 +1,16 @@
 part of '../../../pages/web_asset_dashboard_page.dart';
 
 extension _AssetsPageExtension on _WebAssetDashboardPageState {
-  Widget _assetsPanel({int? limit}) {
-    final filteredAssets = [...visibleAssets]
-      ..sort((first, second) => second.createdAt.compareTo(first.createdAt));
+  Widget _assetsPanel({int? limit}) =>
+      _assetRegistryPanel(inventoryMode: false, limit: limit);
+
+  Widget _assetRegistryPanel({required bool inventoryMode, int? limit}) {
+    final section = inventoryMode
+        ? WebAssetSection.inventory
+        : WebAssetSection.assets;
+    final filteredAssets = [
+      ...(inventoryMode ? visibleInventoryAssets : visibleAssets),
+    ]..sort((first, second) => second.createdAt.compareTo(first.createdAt));
 
     if (limit != null) {
       final recentAssets = filteredAssets.take(limit).toList(growable: false);
@@ -17,9 +24,11 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
       );
     }
 
-    final pagedAssets = _paginate(filteredAssets, WebAssetSection.assets);
+    final pagedAssets = _paginate(filteredAssets, section);
 
-    final statuses = _statusesFor(assets.where(_isRegularAsset));
+    final statuses = _statusesFor(
+      assets.where(inventoryMode ? _isInventoryAsset : _isRegularAsset),
+    );
 
     final totalAssetValue = filteredAssets.fold<double>(
       0,
@@ -38,10 +47,15 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
         .toSet()
         .length;
 
-    final hasFilters = searchQuery.trim().isNotEmpty || selectedStatus != null;
+    final hasFilters =
+        searchQuery.trim().isNotEmpty ||
+        selectedStatus != null ||
+        selectedDateRange != null;
 
     return TweenAnimationBuilder<double>(
-      key: ValueKey('asset-registry-${selectedBranch ?? 'all'}'),
+      key: ValueKey(
+        '${inventoryMode ? 'inventory' : 'asset'}-registry-${selectedBranch ?? 'all'}',
+      ),
       tween: Tween<double>(begin: 0, end: 1),
       duration: const Duration(milliseconds: 520),
       curve: Curves.easeOutCubic,
@@ -60,11 +74,16 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
           _AssetRegistryHeader(
             totalAssets: filteredAssets.length,
             selectedBranch: selectedBranch,
-            onAddAsset: _addAsset,
+            inventoryMode: inventoryMode,
+            onAddAsset: inventoryMode ? _addInventory : _addAsset,
+            selectedDateRange: selectedDateRange,
+            onPickDateRange: _pickAssetDateRange,
             onExport: () {
               _exportList(
                 filteredAssets,
-                selectedBranch == null ? 'assets' : '${selectedBranch}_assets',
+                selectedBranch == null
+                    ? (inventoryMode ? 'inventory_assets' : 'assets')
+                    : '${selectedBranch}_${inventoryMode ? 'inventory_assets' : 'assets'}',
               );
             },
           ),
@@ -75,6 +94,7 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
             totalValue: totalAssetValue,
             locationsCount: locationsCount,
             categoriesCount: categoriesCount,
+            inventoryMode: inventoryMode,
           ),
           const SizedBox(height: 16),
 
@@ -115,13 +135,15 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
                           ),
                         ),
                         const SizedBox(width: 11),
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Asset Directory',
-                                style: TextStyle(
+                                inventoryMode
+                                    ? 'Inventory Directory'
+                                    : 'Asset Directory',
+                                style: const TextStyle(
                                   color: Color(0xff17243b),
                                   fontSize: 17,
                                   fontWeight: FontWeight.w800,
@@ -130,8 +152,10 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
                               ),
                               SizedBox(height: 4),
                               Text(
-                                'Browse, inspect and manage all active asset records',
-                                style: TextStyle(
+                                inventoryMode
+                                    ? 'Browse, inspect and manage all inventory records'
+                                    : 'Browse, inspect and manage all active asset records',
+                                style: const TextStyle(
                                   color: Color(0xff8a97a9),
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w500,
@@ -169,29 +193,29 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
                     padding: const EdgeInsets.fromLTRB(22, 17, 22, 17),
                     child: _AssetRegistryToolbar(
                       searchController: searchController,
+                      inventoryMode: inventoryMode,
                       selectedStatus: selectedStatus,
                       statuses: statuses,
                       resultsCount: filteredAssets.length,
                       hasFilters: hasFilters,
-                      onSearchChanged: (value) {
-                        _updateWebState(() {
-                          searchQuery = value;
-                          _resetPage(WebAssetSection.assets);
-                        });
-                      },
+                      onSearchChanged: (value) =>
+                          _queueRegistrySearch(value, section),
                       onStatusChanged: (value) {
                         _updateWebState(() {
                           selectedStatus = value;
-                          _resetPage(WebAssetSection.assets);
+                          _resetPage(section);
                         });
                       },
+                      selectedDateRange: selectedDateRange,
+                      onPickDateRange: _pickAssetDateRange,
                       onClearFilters: () {
                         searchController.clear();
 
                         _updateWebState(() {
                           searchQuery = '';
                           selectedStatus = null;
-                          _resetPage(WebAssetSection.assets);
+                          selectedDateRange = null;
+                          _resetPage(section);
                         });
                       },
                     ),
@@ -235,9 +259,8 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
                                             _updateWebState(() {
                                               searchQuery = '';
                                               selectedStatus = null;
-                                              _resetPage(
-                                                WebAssetSection.assets,
-                                              );
+                                              selectedDateRange = null;
+                                              _resetPage(section);
                                             });
                                           },
                                         )
@@ -292,7 +315,7 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
                                     pageSize: _WebAssetDashboardPageState
                                         ._assetsPerPage,
                                     onPageChanged: (page) {
-                                      _changePage(WebAssetSection.assets, page);
+                                      _changePage(section, page);
                                     },
                                   ),
                                 ],
