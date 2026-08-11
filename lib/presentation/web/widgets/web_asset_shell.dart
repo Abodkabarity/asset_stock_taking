@@ -395,12 +395,12 @@ class _ShellSidebarState extends State<_ShellSidebar> {
                     ),
                     const SizedBox(height: 10),
                     const _SidebarLabel('MANAGEMENT'),
-                    _SidebarItem(
+                    /*      _SidebarItem(
                       icon: Icons.bar_chart_rounded,
                       label: 'Reports',
                       selected: false,
                       onTap: () => _goHome(context, WebAssetSection.dashboard),
-                    ),
+                    ),*/
                     _SidebarItem(
                       icon: Icons.tune_rounded,
                       label: 'Setup',

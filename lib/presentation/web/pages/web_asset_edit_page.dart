@@ -536,7 +536,11 @@ class _ImagePickerPanel extends StatelessWidget {
               height: 130,
               color: const Color(0xffe8f5fb),
               child: hasSelected
-                  ? Image.memory(selectedBytes!, fit: BoxFit.cover)
+                  ? WebAssetMemoryImage(
+                      bytes: selectedBytes!,
+                      width: 180,
+                      height: 130,
+                    )
                   : WebAssetImage(path: currentUrl, width: 180, height: 130),
             ),
             const SizedBox(width: 16),

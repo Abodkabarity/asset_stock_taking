@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:printing/printing.dart';
 
@@ -16,6 +17,7 @@ import '../web/pages/web_asset_view_page.dart';
 import '../web/utils/web_asset_colors.dart';
 import '../web/utils/web_dropdown_options.dart';
 import '../web/widgets/web_asset_quick_view_dialog.dart';
+import '../web/widgets/web_asset_image.dart';
 import '../web/widgets/web_hover_surface.dart';
 import '../web/widgets/common/web_single_date_picker.dart';
 
@@ -142,9 +144,11 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   bool maintenanceRepeating = false;
   bool loading = true;
   bool sectionLoading = false;
+  bool registryLoading = false;
   WebAssetSection? pendingSection;
   final Map<WebAssetSection, int> _sectionPages = {};
   Timer? _registrySearchDebounce;
+  Timer? _registryRevealTimer;
 
   void _updateWebState(VoidCallback update) => setState(update);
 
@@ -176,6 +180,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     disposeToController.dispose();
     disposeNotesController.dispose();
     _registrySearchDebounce?.cancel();
+    _registryRevealTimer?.cancel();
     super.dispose();
   }
 
@@ -267,15 +272,23 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
           addingInventory = false;
           editingAsset = null;
           detailReturnAfterEdit = null;
+          registryLoading =
+              section == WebAssetSection.assets ||
+              section == WebAssetSection.inventory;
         });
         _scrollContentToTop();
+        _revealRegistryAfterFirstFrame(section);
       }
       return;
     }
 
+    final opensRegistry =
+        section == WebAssetSection.assets ||
+        section == WebAssetSection.inventory;
     setState(() {
       selectedSection = section;
       sectionLoading = false;
+      registryLoading = opensRegistry;
       pendingSection = null;
       selectedStatus = null;
       selectedDateRange = null;
@@ -289,6 +302,18 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       _sectionPages[section] = 0;
     });
     _scrollContentToTop();
+    if (opensRegistry) _revealRegistryAfterFirstFrame(section);
+  }
+
+  void _revealRegistryAfterFirstFrame(WebAssetSection section) {
+    _registryRevealTimer?.cancel();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || selectedSection != section) return;
+      _registryRevealTimer = Timer(const Duration(milliseconds: 320), () {
+        if (!mounted || selectedSection != section) return;
+        setState(() => registryLoading = false);
+      });
+    });
   }
 
   void _queueRegistrySearch(String value, WebAssetSection section) {
@@ -1231,13 +1256,65 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   Future<void> _openTransferAssetPicker() async {
-    final picked = await _showAssetSearchPicker(
-      actionLabel: 'Continue to Transfer',
+    final availableAssets = assets
+        .where(_isOperationallyAvailable)
+        .toList(growable: false);
+    final locationOptions = alphabetizedWebOptions([
+      ...branches,
+      ...availableAssets.map((asset) => asset.location),
+    ]);
+    final defaultLocation = locationOptions.cast<String?>().firstWhere(
+      (location) {
+        final normalized = location?.trim().toLowerCase().replaceAll(
+          RegExp(r'\s+'),
+          ' ',
+        );
+        return normalized == 'asset store' || normalized == 'assets store';
+      },
+      orElse: () =>
+          selectedBranch ??
+          (locationOptions.isEmpty ? null : locationOptions.first),
     );
-    if (picked == null || picked.isEmpty) return;
-    for (final asset in picked) {
+
+    final request = await showDialog<_TransferMoveRequest>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _TransferAssetPickerDialog(
+        assets: availableAssets,
+        locations: locationOptions,
+        initialLocation: defaultLocation,
+      ),
+    );
+    if (request == null || request.assets.isEmpty || !mounted) return;
+
+    setState(() => sectionLoading = true);
+    try {
+      await webRepository.transferAssetBatch(
+        assets: request.assets,
+        branch: request.destination,
+      );
       if (!mounted) return;
-      await _transferAsset(asset);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${request.assets.length} asset${request.assets.length == 1 ? '' : 's'} '
+            'moved to ${request.destination}',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await _loadData();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Transfer failed: $error'),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => sectionLoading = false);
     }
   }
 

@@ -238,32 +238,97 @@ class WebAssetRepository {
   }
 
   Future<String> generateAssetCode(String assetCode) async {
+    final codes = await generateAssetCodes(assetCode, 1);
+    return codes.single;
+  }
+
+  Future<List<String>> generateAssetCodes(
+    String assetCode,
+    int quantity,
+  ) async {
+    if (quantity < 1) return const [];
     final response = await supabase
         .from('asset_stock_taking')
         .select('item_code')
         .eq('asset_code', assetCode);
 
-    final usedSerials = <int>{};
+    var lastSerial = 0;
 
     for (final row in response) {
       final itemCode = row['item_code']?.toString() ?? '';
       final serial = int.tryParse(itemCode.split('-').last);
 
-      if (serial != null) {
-        usedSerials.add(serial);
-      }
+      if (serial != null && serial > lastSerial) lastSerial = serial;
     }
 
-    var nextSerial = 1;
-    while (usedSerials.contains(nextSerial)) {
-      nextSerial++;
-    }
-
-    return '$assetCode-${nextSerial.toString().padLeft(4, '0')}';
+    return List<String>.generate(quantity, (index) {
+      final serial = (lastSerial + index + 1).toString().padLeft(4, '0');
+      return '$assetCode-$serial';
+    }, growable: false);
   }
 
   Future<void> addAsset(Map<String, dynamic> row) async {
     await supabase.from('asset_stock_taking').insert(row);
+  }
+
+  /// Reserves sequential item codes and creates all records in one server-side
+  /// transaction. The fallback keeps older Supabase projects functional until
+  /// [supabase_web_bulk_asset_creation.sql] is installed.
+  Future<List<String>> addAssetsBatch({
+    required String assetCode,
+    required int quantity,
+    required Map<String, dynamic> template,
+  }) async {
+    if (quantity < 1 || quantity > 500) {
+      throw ArgumentError.value(quantity, 'quantity', 'Must be from 1 to 500');
+    }
+
+    try {
+      final response = await supabase.rpc(
+        'create_asset_stock_batch',
+        params: {
+          'p_asset_code': assetCode,
+          'p_quantity': quantity,
+          'p_template': template,
+        },
+      );
+      return (response as List)
+          .map((row) => (row as Map)['item_code']?.toString() ?? '')
+          .where((code) => code.isNotEmpty)
+          .toList(growable: false);
+    } on PostgrestException catch (error) {
+      final missingFunction =
+          error.code == 'PGRST202' ||
+          error.code == '42883' ||
+          error.message.toLowerCase().contains('create_asset_stock_batch');
+      if (!missingFunction) rethrow;
+    }
+
+    // Backward-compatible path. A unique item_code constraint protects this
+    // batch from concurrent users; on conflict the complete insert is retried.
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final codes = await generateAssetCodes(assetCode, quantity);
+      final createdAt = DateTime.now().toUtc();
+      final rows = List<Map<String, dynamic>>.generate(quantity, (index) {
+        return {
+          ...template,
+          'asset_code': assetCode,
+          'item_code': codes[index],
+          'created_at': createdAt
+              .add(Duration(microseconds: index))
+              .toIso8601String(),
+        };
+      }, growable: false);
+
+      try {
+        await supabase.from('asset_stock_taking').insert(rows);
+        return codes;
+      } on PostgrestException catch (error) {
+        if (error.code != '23505' || attempt == 2) rethrow;
+      }
+    }
+
+    throw StateError('Unable to reserve unique item codes');
   }
 
   Future<void> transferAsset({
@@ -274,6 +339,104 @@ class WebAssetRepository {
         .from('asset_stock_taking')
         .update({'location': branch, 'project_name': ''})
         .eq('item_code', itemCode);
+  }
+
+  Future<void> transferAssetBatch({
+    required List<AssetStockModel> assets,
+    required String branch,
+  }) async {
+    if (assets.isEmpty) return;
+
+    final destination = branch.trim();
+    if (destination.isEmpty) {
+      throw ArgumentError.value(branch, 'branch', 'Destination is required');
+    }
+
+    final itemCodes = assets
+        .map((asset) => asset.itemCode.trim())
+        .where((code) => code.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (itemCodes.isEmpty) return;
+
+    final normalizedSources = assets
+        .map((asset) => asset.location.trim().toLowerCase())
+        .toSet();
+    if (normalizedSources.length != 1) {
+      throw StateError('All selected assets must share the same location.');
+    }
+    final source = assets.first.location.trim();
+    if (source.toLowerCase() == destination.toLowerCase()) {
+      throw StateError('Source and destination locations must be different.');
+    }
+
+    final sourceLocations = <String, List<String>>{};
+    for (final asset in assets) {
+      sourceLocations
+          .putIfAbsent(asset.location, () => <String>[])
+          .add(asset.itemCode);
+    }
+
+    final batchId =
+        'move-${DateTime.now().toUtc().microsecondsSinceEpoch.toString()}';
+    final movedAt = DateTime.now().toUtc().toIso8601String();
+
+    final updatedRows = await supabase
+        .from('asset_stock_taking')
+        .update({'location': destination, 'project_name': ''})
+        .eq('location', source)
+        .inFilter('item_code', itemCodes)
+        .select('item_code');
+    final updatedCodes = updatedRows
+        .map<String>((row) => row['item_code']?.toString() ?? '')
+        .where((code) => code.isNotEmpty)
+        .toSet();
+    if (updatedCodes.length != itemCodes.length) {
+      if (updatedCodes.isNotEmpty) {
+        await supabase
+            .from('asset_stock_taking')
+            .update({'location': source, 'project_name': ''})
+            .inFilter('item_code', updatedCodes.toList(growable: false));
+      }
+      throw StateError(
+        'Some assets changed before the transfer. Refresh and try again.',
+      );
+    }
+
+    try {
+      await supabase
+          .from('asset_activity_log')
+          .insert(
+            assets
+                .map(
+                  (asset) => {
+                    'item_code': asset.itemCode,
+                    'action': 'transfer',
+                    'description':
+                        'Transferred from ${asset.location} to $destination',
+                    'from_branch': asset.location,
+                    'to_branch': destination,
+                    'metadata': {
+                      'batch_id': batchId,
+                      'batch_quantity': itemCodes.length,
+                      'batch_item_codes': itemCodes,
+                      'asset_code': asset.assetCode,
+                      'moved_at': movedAt,
+                    },
+                  },
+                )
+                .toList(growable: false),
+          );
+    } catch (error) {
+      // Compensating rollback keeps the registry consistent when logging fails.
+      for (final entry in sourceLocations.entries) {
+        await supabase
+            .from('asset_stock_taking')
+            .update({'location': entry.key, 'project_name': ''})
+            .inFilter('item_code', entry.value);
+      }
+      rethrow;
+    }
   }
 
   Future<void> updateStatus({

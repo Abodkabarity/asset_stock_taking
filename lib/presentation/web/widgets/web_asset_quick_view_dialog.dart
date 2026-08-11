@@ -72,6 +72,7 @@ class WebAssetQuickViewDialog extends StatelessWidget {
                           path: asset.imagePath,
                           width: 150,
                           height: 150,
+                          viewerTitle: '${asset.name} · ${asset.itemCode}',
                         ),
                       ],
                     ),

@@ -8,6 +8,7 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
     final section = inventoryMode
         ? WebAssetSection.inventory
         : WebAssetSection.assets;
+
     final filteredAssets = [
       ...(inventoryMode ? visibleInventoryAssets : visibleAssets),
     ]..sort((first, second) => second.createdAt.compareTo(first.createdAt));
@@ -25,6 +26,9 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
     }
 
     final pagedAssets = _paginate(filteredAssets, section);
+    final pageItems = registryLoading
+        ? pagedAssets.items.take(6).toList(growable: false)
+        : pagedAssets.items;
 
     final statuses = _statusesFor(
       assets.where(inventoryMode ? _isInventoryAsset : _isRegularAsset),
@@ -56,8 +60,10 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
       key: ValueKey(
         '${inventoryMode ? 'inventory' : 'asset'}-registry-${selectedBranch ?? 'all'}',
       ),
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 520),
+      // The registry itself stays visually stable while the translucent
+      // loading layer is visible; only the overlay is removed when ready.
+      tween: Tween<double>(begin: 1, end: 1),
+      duration: const Duration(milliseconds: 1),
       curve: Curves.easeOutCubic,
       builder: (context, value, child) {
         return Opacity(
@@ -68,269 +74,536 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
           ),
         );
       },
+      child: Stack(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _AssetRegistryHeader(
+                totalAssets: filteredAssets.length,
+                selectedBranch: selectedBranch,
+                inventoryMode: inventoryMode,
+                onAddAsset: inventoryMode ? _addInventory : _addAsset,
+                selectedDateRange: selectedDateRange,
+                onPickDateRange: _pickAssetDateRange,
+                onExport: () {
+                  _exportList(
+                    filteredAssets,
+                    selectedBranch == null
+                        ? (inventoryMode ? 'inventory_assets' : 'assets')
+                        : '${selectedBranch}_${inventoryMode ? 'inventory_assets' : 'assets'}',
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+
+              _AssetRegistrySummaryStrip(
+                totalAssets: filteredAssets.length,
+                totalValue: totalAssetValue,
+                locationsCount: locationsCount,
+                categoriesCount: categoriesCount,
+                inventoryMode: inventoryMode,
+              ),
+              const SizedBox(height: 16),
+
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: const Color(0xffdfe7f2)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xff1d3557).withValues(alpha: 0.055),
+                      blurRadius: 28,
+                      spreadRadius: -10,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 5,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Color(0xff4263eb),
+                                    Color(0xff15aabf),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                            const SizedBox(width: 11),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    inventoryMode
+                                        ? 'Inventory Directory'
+                                        : 'Asset Directory',
+                                    style: const TextStyle(
+                                      color: Color(0xff17243b),
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.25,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    inventoryMode
+                                        ? 'Browse, inspect and manage all inventory records'
+                                        : 'Browse, inspect and manage all active asset records',
+                                    style: const TextStyle(
+                                      color: Color(0xff8a97a9),
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 7,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xfff1f5fb),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: const Color(0xffdfe6f0),
+                                ),
+                              ),
+                              child: Text(
+                                '${filteredAssets.length} records',
+                                style: const TextStyle(
+                                  color: Color(0xff60718a),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const Divider(height: 1, color: Color(0xffe8edf4)),
+
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 17, 22, 17),
+                        child: _AssetRegistryToolbar(
+                          searchController: searchController,
+                          inventoryMode: inventoryMode,
+                          selectedStatus: selectedStatus,
+                          statuses: statuses,
+                          resultsCount: filteredAssets.length,
+                          hasFilters: hasFilters,
+                          onSearchChanged: (value) =>
+                              _queueRegistrySearch(value, section),
+                          onStatusChanged: (value) {
+                            _updateWebState(() {
+                              selectedStatus = value;
+                              _resetPage(section);
+                            });
+                          },
+                          selectedDateRange: selectedDateRange,
+                          onPickDateRange: _pickAssetDateRange,
+                          onClearFilters: () {
+                            searchController.clear();
+
+                            _updateWebState(() {
+                              searchQuery = '';
+                              selectedStatus = null;
+                              selectedDateRange = null;
+                              _resetPage(section);
+                            });
+                          },
+                        ),
+                      ),
+
+                      Container(
+                        width: double.infinity,
+                        height: 1,
+                        color: const Color(0xffedf1f6),
+                      ),
+
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final tableWidth = constraints.maxWidth < 1120
+                              ? 1120.0
+                              : constraints.maxWidth;
+
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: SizedBox(
+                              width: tableWidth,
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  22,
+                                  18,
+                                  22,
+                                  20,
+                                ),
+                                child: Column(
+                                  children: [
+                                    const _AssetRegistryTableHeader(),
+
+                                    AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 260,
+                                      ),
+                                      switchInCurve: Curves.easeOutCubic,
+                                      switchOutCurve: Curves.easeInCubic,
+                                      child: filteredAssets.isEmpty
+                                          ? _AssetRegistryEmptyState(
+                                              key: ValueKey(
+                                                'empty-${searchQuery.trim()}-${selectedStatus ?? 'all'}',
+                                              ),
+                                              hasFilters: hasFilters,
+                                              onClearFilters: () {
+                                                searchController.clear();
+
+                                                _updateWebState(() {
+                                                  searchQuery = '';
+                                                  selectedStatus = null;
+                                                  selectedDateRange = null;
+                                                  _resetPage(section);
+                                                });
+                                              },
+                                            )
+                                          : Column(
+                                              key: ValueKey(
+                                                'asset-page-${pagedAssets.currentPage}'
+                                                '-${searchQuery.trim()}'
+                                                '-${selectedStatus ?? 'all'}',
+                                              ),
+                                              children: [
+                                                const SizedBox(height: 8),
+                                                for (
+                                                  var index = 0;
+                                                  index < pageItems.length;
+                                                  index++
+                                                )
+                                                  RepaintBoundary(
+                                                    key: ValueKey(
+                                                      pageItems[index].itemCode,
+                                                    ),
+                                                    child: _AssetRegistryRow(
+                                                      asset: pageItems[index],
+                                                      animationDelay:
+                                                          index * 22,
+                                                      onDetails: () =>
+                                                          _showAssetDetails(
+                                                            pageItems[index],
+                                                          ),
+                                                      onTransfer: () =>
+                                                          _transferAsset(
+                                                            pageItems[index],
+                                                          ),
+                                                      onMaintenance: () =>
+                                                          _openMaintenanceDetailsDialog(
+                                                            pageItems[index],
+                                                          ),
+                                                      onDispose: () =>
+                                                          _openDisposeDetailsDialog(
+                                                            pageItems[index],
+                                                          ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                    ),
+
+                                    if (filteredAssets.isNotEmpty) ...[
+                                      const SizedBox(height: 12),
+                                      _PaginationBar(
+                                        currentPage: pagedAssets.currentPage,
+                                        totalPages: pagedAssets.totalPages,
+                                        totalItems: pagedAssets.totalItems,
+                                        pageSize: _WebAssetDashboardPageState
+                                            ._assetsPerPage,
+                                        onPageChanged: (page) {
+                                          _changePage(section, page);
+                                        },
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (registryLoading) const Positioned.fill(child: _RegistryOverlay()),
+        ],
+      ),
+    );
+  }
+}
+
+// Kept temporarily for compatibility with older hot-reload states. It is
+// tree-shaken from release builds; the live registry now uses _RegistryOverlay.
+// ignore: unused_element
+class _AssetRegistryLoadingPanel extends StatelessWidget {
+  final bool inventoryMode;
+
+  const _AssetRegistryLoadingPanel({required this.inventoryMode});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = inventoryMode ? 'Inventory' : 'Asset';
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0.55, end: 1),
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) => Opacity(opacity: value, child: child),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AssetRegistryHeader(
-            totalAssets: filteredAssets.length,
-            selectedBranch: selectedBranch,
-            inventoryMode: inventoryMode,
-            onAddAsset: inventoryMode ? _addInventory : _addAsset,
-            selectedDateRange: selectedDateRange,
-            onPickDateRange: _pickAssetDateRange,
-            onExport: () {
-              _exportList(
-                filteredAssets,
-                selectedBranch == null
-                    ? (inventoryMode ? 'inventory_assets' : 'assets')
-                    : '${selectedBranch}_${inventoryMode ? 'inventory_assets' : 'assets'}',
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-
-          _AssetRegistrySummaryStrip(
-            totalAssets: filteredAssets.length,
-            totalValue: totalAssetValue,
-            locationsCount: locationsCount,
-            categoriesCount: categoriesCount,
-            inventoryMode: inventoryMode,
-          ),
-          const SizedBox(height: 16),
-
           Container(
-            width: double.infinity,
+            height: 132,
+            padding: const EdgeInsets.symmetric(horizontal: 30),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: const Color(0xffdfe7f2)),
-              boxShadow: [
+              border: Border.all(color: const Color(0xffdce6f3)),
+              boxShadow: const [
                 BoxShadow(
-                  color: const Color(0xff1d3557).withValues(alpha: 0.055),
-                  blurRadius: 28,
-                  spreadRadius: -10,
-                  offset: const Offset(0, 14),
+                  color: Color(0x10234b83),
+                  blurRadius: 24,
+                  offset: Offset(0, 10),
                 ),
               ],
             ),
-            child: ClipRRect(
+            child: Row(
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xff426cf2), Color(0xff18aac8)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Icon(
+                    inventoryMode
+                        ? Icons.inventory_2_outlined
+                        : Icons.inventory_outlined,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$label Registry',
+                        style: const TextStyle(
+                          color: Color(0xff112445),
+                          fontSize: 23,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Text(
+                        'Preparing the latest ${label.toLowerCase()} records…',
+                        style: const TextStyle(
+                          color: Color(0xff7183a2),
+                          fontSize: 13.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.6,
+                    color: Color(0xff2f69f4),
+                    backgroundColor: Color(0xffe7eefc),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = (constraints.maxWidth - 42) / 4;
+              return Wrap(
+                spacing: 14,
+                runSpacing: 14,
+                children: List.generate(
+                  4,
+                  (index) => _RegistrySkeletonBox(
+                    width: width,
+                    height: 102,
+                    radius: 18,
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: Colors.white,
               borderRadius: BorderRadius.circular(22),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 5,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [Color(0xff4263eb), Color(0xff15aabf)],
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                        ),
-                        const SizedBox(width: 11),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                inventoryMode
-                                    ? 'Inventory Directory'
-                                    : 'Asset Directory',
-                                style: const TextStyle(
-                                  color: Color(0xff17243b),
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.25,
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                inventoryMode
-                                    ? 'Browse, inspect and manage all inventory records'
-                                    : 'Browse, inspect and manage all active asset records',
-                                style: const TextStyle(
-                                  color: Color(0xff8a97a9),
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xfff1f5fb),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xffdfe6f0)),
-                          ),
-                          child: Text(
-                            '${filteredAssets.length} records',
-                            style: const TextStyle(
-                              color: Color(0xff60718a),
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const Divider(height: 1, color: Color(0xffe8edf4)),
-
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 17, 22, 17),
-                    child: _AssetRegistryToolbar(
-                      searchController: searchController,
-                      inventoryMode: inventoryMode,
-                      selectedStatus: selectedStatus,
-                      statuses: statuses,
-                      resultsCount: filteredAssets.length,
-                      hasFilters: hasFilters,
-                      onSearchChanged: (value) =>
-                          _queueRegistrySearch(value, section),
-                      onStatusChanged: (value) {
-                        _updateWebState(() {
-                          selectedStatus = value;
-                          _resetPage(section);
-                        });
-                      },
-                      selectedDateRange: selectedDateRange,
-                      onPickDateRange: _pickAssetDateRange,
-                      onClearFilters: () {
-                        searchController.clear();
-
-                        _updateWebState(() {
-                          searchQuery = '';
-                          selectedStatus = null;
-                          selectedDateRange = null;
-                          _resetPage(section);
-                        });
-                      },
-                    ),
-                  ),
-
-                  Container(
-                    width: double.infinity,
-                    height: 1,
-                    color: const Color(0xffedf1f6),
-                  ),
-
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final tableWidth = constraints.maxWidth < 1120
-                          ? 1120.0
-                          : constraints.maxWidth;
-
-                      return SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: SizedBox(
-                          width: tableWidth,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(22, 18, 22, 20),
-                            child: Column(
-                              children: [
-                                const _AssetRegistryTableHeader(),
-
-                                AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 260),
-                                  switchInCurve: Curves.easeOutCubic,
-                                  switchOutCurve: Curves.easeInCubic,
-                                  child: filteredAssets.isEmpty
-                                      ? _AssetRegistryEmptyState(
-                                          key: ValueKey(
-                                            'empty-${searchQuery.trim()}-${selectedStatus ?? 'all'}',
-                                          ),
-                                          hasFilters: hasFilters,
-                                          onClearFilters: () {
-                                            searchController.clear();
-
-                                            _updateWebState(() {
-                                              searchQuery = '';
-                                              selectedStatus = null;
-                                              selectedDateRange = null;
-                                              _resetPage(section);
-                                            });
-                                          },
-                                        )
-                                      : Column(
-                                          key: ValueKey(
-                                            'asset-page-${pagedAssets.currentPage}'
-                                            '-${searchQuery.trim()}'
-                                            '-${selectedStatus ?? 'all'}',
-                                          ),
-                                          children: [
-                                            const SizedBox(height: 8),
-                                            for (
-                                              var index = 0;
-                                              index < pagedAssets.items.length;
-                                              index++
-                                            )
-                                              _AssetRegistryRow(
-                                                key: ValueKey(
-                                                  pagedAssets
-                                                      .items[index]
-                                                      .itemCode,
-                                                ),
-                                                asset: pagedAssets.items[index],
-                                                animationDelay: index * 22,
-                                                onDetails: () =>
-                                                    _showAssetDetails(
-                                                      pagedAssets.items[index],
-                                                    ),
-                                                onTransfer: () =>
-                                                    _transferAsset(
-                                                      pagedAssets.items[index],
-                                                    ),
-                                                onMaintenance: () =>
-                                                    _openMaintenanceDetailsDialog(
-                                                      pagedAssets.items[index],
-                                                    ),
-                                                onDispose: () =>
-                                                    _openDisposeDetailsDialog(
-                                                      pagedAssets.items[index],
-                                                    ),
-                                              ),
-                                          ],
-                                        ),
-                                ),
-
-                                if (filteredAssets.isNotEmpty) ...[
-                                  const SizedBox(height: 12),
-                                  _PaginationBar(
-                                    currentPage: pagedAssets.currentPage,
-                                    totalPages: pagedAssets.totalPages,
-                                    totalItems: pagedAssets.totalItems,
-                                    pageSize: _WebAssetDashboardPageState
-                                        ._assetsPerPage,
-                                    onPageChanged: (page) {
-                                      _changePage(section, page);
-                                    },
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+              border: Border.all(color: const Color(0xffdce6f3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _RegistrySkeletonBox(width: 210, height: 20),
+                const SizedBox(height: 22),
+                const _RegistrySkeletonBox(height: 52, radius: 13),
+                const SizedBox(height: 16),
+                for (var index = 0; index < 5; index++) ...[
+                  _RegistrySkeletonRow(index: index),
+                  if (index != 4) const SizedBox(height: 9),
                 ],
-              ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _RegistrySkeletonRow extends StatelessWidget {
+  final int index;
+
+  const _RegistrySkeletonRow({required this.index});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 54,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xfffbfcfe),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: const Color(0xffedf1f6)),
+      ),
+      child: Row(
+        children: [
+          const _RegistrySkeletonBox(width: 38, height: 38, radius: 8),
+          const SizedBox(width: 22),
+          _RegistrySkeletonBox(width: 105 + (index * 7), height: 11),
+          const Spacer(),
+          const _RegistrySkeletonBox(width: 128, height: 11),
+          const Spacer(),
+          const _RegistrySkeletonBox(width: 72, height: 26, radius: 13),
+          const Spacer(),
+          const _RegistrySkeletonBox(width: 118, height: 11),
+          const SizedBox(width: 45),
+        ],
+      ),
+    );
+  }
+}
+
+class _RegistrySkeletonBox extends StatelessWidget {
+  final double? width;
+  final double height;
+  final double radius;
+
+  const _RegistrySkeletonBox({
+    this.width,
+    required this.height,
+    this.radius = 7,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xffedf2f9), Color(0xfff6f8fc)],
+        ),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+}
+
+class _RegistryOverlay extends StatelessWidget {
+  const _RegistryOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return AbsorbPointer(
+      child: Container(
+        color: const Color(0x7ae7ebf1),
+        alignment: Alignment.center,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.96),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xffd8e1ee)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x24304f78),
+                blurRadius: 28,
+                offset: Offset(0, 12),
+              ),
+            ],
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Color(0xff2f69f4),
+                  backgroundColor: Color(0xffe7eefc),
+                ),
+              ),
+              SizedBox(width: 14),
+              Text(
+                'Loading records…',
+                style: TextStyle(
+                  color: Color(0xff263b5b),
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -33,126 +33,132 @@ class _TopBar extends StatelessWidget {
     final branchItems = ['__all__', ...alphabetizedWebOptions(branches)];
     final compactActions = MediaQuery.sizeOf(context).width < 1500;
 
+    final currentTitle = titleOverride ?? _title;
+    final currentSubtitle = subtitleOverride ?? _subtitle;
+
     return Container(
-      height: 92,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      height: 96,
       decoration: const BoxDecoration(
-        color: Color(0xF9FFFFFF),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFFFFFF), Color(0xFFFAFCFF), Color(0xFFF5F9FF)],
+        ),
         border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: AppColors.blueSoft,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.menu_rounded, color: AppColors.headerText),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x0D174C82),
+            blurRadius: 18,
+            offset: Offset(0, 7),
           ),
-          const SizedBox(width: 18),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                titleOverride ?? _title,
-                style: const TextStyle(
-                  fontSize: 23,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.text,
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: 330,
+            top: -105,
+            child: Container(
+              width: 210,
+              height: 210,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [Color(0x142878F0), Color(0x002878F0)],
                 ),
               ),
-              SizedBox(height: 3),
-              Text(
-                subtitleOverride ?? _subtitle,
-                style: const TextStyle(fontSize: 12, color: AppColors.subText),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(width: 24),
-          _TopNavIcon(
-            icon: Icons.inventory_2_outlined,
-            label: 'Assets',
-            onTap: onAssets,
-            compact: compactActions,
-          ),
-          _TopNavIcon(
-            icon: Icons.add_circle_outline,
-            label: 'Add Asset',
-            onTap: onAddAsset,
-          ),
-          _TopNavIcon(
-            icon: Icons.add_box_outlined,
-            label: 'Add Inventory',
-            onTap: onAddInventory,
-          ),
-          _TopNavIcon(
-            icon: Icons.print_outlined,
-            label: 'Print',
-            onTap: onPrint,
-            compact: compactActions,
-          ),
-          const Spacer(),
-          SizedBox(
-            width: 190,
-            child: DropdownButtonFormField<String>(
-              initialValue: branchValue,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Branch',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              items: branchItems.map((branch) {
-                return DropdownMenuItem(
-                  value: branch,
-                  child: Text(
-                    branch == '__all__' ? 'All Branches' : branch,
-                    overflow: TextOverflow.ellipsis,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                const _HeaderMenuButton(),
+                SizedBox(
+                  width: 220,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 330),
+                    switchInCurve: Curves.easeOutCubic,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, .16),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: Column(
+                      key: ValueKey(currentTitle),
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          currentTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 23,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.text,
+                            letterSpacing: -.35,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          currentSubtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.subText,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                onBranchChanged(value == '__all__' ? null : value);
-              },
+                ),
+                const SizedBox(width: 10),
+                _TopNavIcon(
+                  icon: Icons.inventory_2_outlined,
+                  label: 'Assets',
+                  onTap: onAssets,
+                  compact: compactActions,
+                ),
+                _TopNavIcon(
+                  icon: Icons.add_circle_outline,
+                  label: 'Add Asset',
+                  onTap: onAddAsset,
+                  compact: compactActions,
+                ),
+                _TopNavIcon(
+                  icon: Icons.add_box_outlined,
+                  label: 'Add Inventory',
+                  onTap: onAddInventory,
+                  compact: compactActions,
+                ),
+                _TopNavIcon(
+                  icon: Icons.print_outlined,
+                  label: 'Print',
+                  onTap: onPrint,
+                  compact: compactActions,
+                ),
+                const Spacer(),
+                _HeaderBranchSelector(
+                  value: branchValue,
+                  items: branchItems,
+                  onChanged: (value) =>
+                      onBranchChanged(value == '__all__' ? null : value),
+                ),
+                const SizedBox(width: 9),
+                _HeaderRefreshButton(onPressed: onRefresh),
+                const SizedBox(width: 10),
+                Container(width: 1, height: 34, color: AppColors.border),
+                const SizedBox(width: 12),
+                const _HeaderProfile(),
+              ],
             ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: onRefresh,
-            icon: const Icon(Icons.refresh, size: 22),
-          ),
-          const SizedBox(width: 8),
-          Container(width: 1, height: 34, color: AppColors.border),
-          const SizedBox(width: 14),
-          Container(
-            width: 38,
-            height: 38,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [AppColors.primaryColor, AppColors.cyan],
-              ),
-            ),
-            child: const Icon(Icons.person_outline, color: Colors.white),
-          ),
-          const SizedBox(width: 10),
-          const Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Al Ain Team',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              Text(
-                'Administrator',
-                style: TextStyle(fontSize: 11, color: AppColors.subText),
-              ),
-            ],
           ),
         ],
       ),
@@ -230,6 +236,261 @@ class _TopBar extends StatelessWidget {
   }
 }
 
+class _HeaderMenuButton extends StatefulWidget {
+  const _HeaderMenuButton();
+
+  @override
+  State<_HeaderMenuButton> createState() => _HeaderMenuButtonState();
+}
+
+class _HeaderMenuButtonState extends State<_HeaderMenuButton> {
+  bool hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => hovered = true),
+      onExit: (_) => setState(() => hovered = false),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        scale: hovered ? 1.055 : 1,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          width: 130,
+          height: 80,
+          padding: const EdgeInsets.all(5),
+          transform: Matrix4.translationValues(0, hovered ? -2 : 0, 0),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(13),
+            child: Transform.scale(
+              scale: 1,
+              child: RepaintBoundary(
+                child: Image.asset(
+                  'assets/images/logo_APG_loop.gif',
+                  fit: BoxFit.fill,
+                  alignment: Alignment.center,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.high,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.local_pharmacy_rounded,
+                    color: Color(0xFF1278ED),
+                    size: 28,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderBranchSelector extends StatefulWidget {
+  final String value;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
+
+  const _HeaderBranchSelector({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  State<_HeaderBranchSelector> createState() => _HeaderBranchSelectorState();
+}
+
+class _HeaderBranchSelectorState extends State<_HeaderBranchSelector> {
+  bool hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => hovered = true),
+      onExit: (_) => setState(() => hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        width: 194,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .9),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: hovered
+              ? const [
+                  BoxShadow(
+                    color: Color(0x302878F0),
+                    blurRadius: 20,
+                    offset: Offset(0, 8),
+                  ),
+                ]
+              : null,
+        ),
+        child: DropdownButtonFormField<String>(
+          key: ValueKey(widget.value),
+          initialValue: widget.value,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: 'Branch',
+            isDense: true,
+            prefixIcon: Icon(
+              Icons.storefront_outlined,
+              size: 18,
+              color: hovered ? AppColors.primaryColor : AppColors.subText,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(
+                color: hovered ? const Color(0xFF8DCDF5) : AppColors.border,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: AppColors.primaryColor,
+                width: 1.4,
+              ),
+            ),
+          ),
+          items: widget.items
+              .map((branch) {
+                return DropdownMenuItem(
+                  value: branch,
+                  child: Text(
+                    branch == '__all__' ? 'All Branches' : branch,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              })
+              .toList(growable: false),
+          onChanged: widget.onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderRefreshButton extends StatefulWidget {
+  final VoidCallback onPressed;
+
+  const _HeaderRefreshButton({required this.onPressed});
+
+  @override
+  State<_HeaderRefreshButton> createState() => _HeaderRefreshButtonState();
+}
+
+class _HeaderRefreshButtonState extends State<_HeaderRefreshButton> {
+  bool hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => hovered = true),
+      onExit: (_) => setState(() => hovered = false),
+      child: Tooltip(
+        message: 'Refresh',
+        child: InkWell(
+          onTap: widget.onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: hovered ? AppColors.blueSoft : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: hovered
+                  ? Border.all(color: const Color(0xFFB8D9FF))
+                  : null,
+            ),
+            child: AnimatedRotation(
+              turns: hovered ? .12 : 0,
+              duration: const Duration(milliseconds: 300),
+              child: Icon(
+                Icons.refresh_rounded,
+                size: 22,
+                color: hovered ? AppColors.primaryColor : AppColors.headerText,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderProfile extends StatefulWidget {
+  const _HeaderProfile();
+
+  @override
+  State<_HeaderProfile> createState() => _HeaderProfileState();
+}
+
+class _HeaderProfileState extends State<_HeaderProfile> {
+  bool hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => hovered = true),
+      onExit: (_) => setState(() => hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.fromLTRB(5, 5, 10, 5),
+        decoration: BoxDecoration(
+          color: hovered ? AppColors.blueSoft.withValues(alpha: .75) : null,
+          borderRadius: BorderRadius.circular(24),
+          border: hovered ? Border.all(color: const Color(0xFFCEE2FF)) : null,
+        ),
+        child: Row(
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 240),
+              width: 39,
+              height: 39,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [AppColors.primaryColor, AppColors.cyan],
+                ),
+                boxShadow: hovered
+                    ? const [
+                        BoxShadow(
+                          color: Color(0x5500BDEB),
+                          blurRadius: 16,
+                          offset: Offset(0, 6),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: const Icon(Icons.person_outline, color: Colors.white),
+            ),
+            const SizedBox(width: 10),
+            const Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Al Ain Team',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  'Administrator',
+                  style: TextStyle(fontSize: 11, color: AppColors.subText),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Sidebar extends StatelessWidget {
   final WebAssetSection section;
   final int alertCount;
@@ -280,7 +541,7 @@ class _Sidebar extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Al Ain Pharmacy',
+                        'Asset Pharmacy',
                         maxLines: 1,
                         style: TextStyle(
                           color: Colors.white,
@@ -290,7 +551,7 @@ class _Sidebar extends StatelessWidget {
                       ),
                       SizedBox(height: 3),
                       Text(
-                        'ASSET',
+                        'Al Ain Pharmacy',
                         style: TextStyle(
                           color: Colors.white70,
                           fontSize: 12,
@@ -349,12 +610,7 @@ class _Sidebar extends StatelessWidget {
                       ),
                     ),
                   ),
-                  _SidebarItem(
-                    icon: Icons.bar_chart_rounded,
-                    label: 'Reports',
-                    selected: false,
-                    onTap: () => onSelected(WebAssetSection.dashboard),
-                  ),
+
                   _SetupSidebarGroup(selected: section, onSelected: onSelected),
                 ],
               ),
@@ -1092,7 +1348,7 @@ class _SidebarSubItemState extends State<_SidebarSubItem> {
   }
 }
 
-class _TopNavIcon extends StatelessWidget {
+class _TopNavIcon extends StatefulWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
@@ -1106,31 +1362,74 @@ class _TopNavIcon extends StatelessWidget {
   });
 
   @override
+  State<_TopNavIcon> createState() => _TopNavIconState();
+}
+
+class _TopNavIconState extends State<_TopNavIcon> {
+  bool hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: label,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 7 : 10,
-            vertical: 8,
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 21, color: AppColors.secondaryColor),
-              if (!compact) ...[
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => hovered = true),
+      onExit: (_) => setState(() => hovered = false),
+      child: Tooltip(
+        message: widget.label,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(11),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 210),
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(0, hovered ? -2 : 0, 0),
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.compact ? 8 : 10,
+              vertical: 9,
+            ),
+            decoration: BoxDecoration(
+              color: hovered ? AppColors.blueSoft.withValues(alpha: .82) : null,
+              borderRadius: BorderRadius.circular(11),
+              border: hovered
+                  ? Border.all(color: const Color(0xFFCEE2FF))
+                  : null,
+              boxShadow: hovered
+                  ? const [
+                      BoxShadow(
+                        color: Color(0x202878F0),
+                        blurRadius: 15,
+                        offset: Offset(0, 7),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              children: [
+                AnimatedRotation(
+                  turns: hovered ? .025 : 0,
+                  duration: const Duration(milliseconds: 220),
+                  child: Icon(
+                    widget.icon,
+                    size: 21,
+                    color: hovered
+                        ? AppColors.primaryColor
+                        : AppColors.secondaryColor,
                   ),
                 ),
+                if (!widget.compact) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    widget.label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: hovered ? AppColors.primaryColor : AppColors.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

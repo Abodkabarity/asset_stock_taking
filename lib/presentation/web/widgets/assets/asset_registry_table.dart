@@ -17,7 +17,7 @@ class _AssetRegistryTableHeader extends StatelessWidget {
       ),
       child: const Row(
         children: [
-          SizedBox(width: 62, child: _AssetRegistryHeaderText('Photo')),
+          SizedBox(width: 76, child: _AssetRegistryHeaderText('Photo')),
           Expanded(flex: 2, child: _AssetRegistryHeaderText('Asset Tag ID')),
           Expanded(flex: 3, child: _AssetRegistryHeaderText('Asset Details')),
           Expanded(flex: 2, child: _AssetRegistryHeaderText('Status')),
@@ -147,10 +147,13 @@ class _AssetRegistryRowState extends State<_AssetRegistryRow> {
                       child: Row(
                         children: [
                           SizedBox(
-                            width: 62,
-                            child: Hero(
-                              tag: 'asset-registry-image-${asset.itemCode}',
-                              child: _AssetImage(path: asset.imagePath),
+                            width: 76,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Hero(
+                                tag: 'asset-registry-image-${asset.itemCode}',
+                                child: _AssetImage(path: asset.imagePath),
+                              ),
                             ),
                           ),
 

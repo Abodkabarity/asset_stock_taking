@@ -43,34 +43,11 @@ class _LargeAssetImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = path != null && path!.trim().isNotEmpty;
-
-    return Container(
+    return WebAssetImage(
+      path: path,
+      width: double.infinity,
       height: 150,
-      decoration: BoxDecoration(
-        color: AppColors.backgroundWidget,
-        border: Border.all(color: AppColors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: hasImage
-          ? Image.network(
-              path!,
-              width: double.infinity,
-              height: 150,
-              cacheWidth: 640,
-              fit: BoxFit.cover,
-              filterQuality: FilterQuality.medium,
-              errorBuilder: (_, _, _) => const Icon(
-                Icons.broken_image_outlined,
-                color: AppColors.subText,
-                size: 34,
-              ),
-            )
-          : const Icon(
-              Icons.inventory_2_outlined,
-              color: AppColors.primaryColor,
-              size: 42,
-            ),
+      viewerTitle: 'Asset image',
     );
   }
 }
