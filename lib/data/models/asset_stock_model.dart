@@ -51,6 +51,16 @@ class AssetStockModel {
 
   final String? localWarrantyImagePath;
 
+  /// Web disposal evidence. These fields stay optional so existing mobile
+  /// records and older local Hive payloads remain fully compatible.
+  final String disposedDate;
+
+  final String disposedTo;
+
+  final String disposedNotes;
+
+  final String? disposedImagePath;
+
   final bool isSynced;
 
   final bool isDeleted;
@@ -82,6 +92,10 @@ class AssetStockModel {
     this.warrantySerialNo = '',
     this.warrantyImagePath,
     this.localWarrantyImagePath,
+    this.disposedDate = '',
+    this.disposedTo = '',
+    this.disposedNotes = '',
+    this.disposedImagePath,
     required this.createdAt,
     this.isSynced = false,
     this.isDeleted = false,
@@ -182,6 +196,14 @@ class AssetStockModel {
 
       localWarrantyImagePath: json['local_warranty_image_path']?.toString(),
 
+      disposedDate: json['disposed_date']?.toString() ?? '',
+
+      disposedTo: json['disposed_to']?.toString() ?? '',
+
+      disposedNotes: json['disposed_notes']?.toString() ?? '',
+
+      disposedImagePath: json['disposed_image_path']?.toString(),
+
       isSynced: json['is_synced'] ?? false,
 
       isDeleted: json['is_deleted'] ?? false,
@@ -217,6 +239,10 @@ class AssetStockModel {
     String? warrantySerialNo,
     String? warrantyImagePath,
     String? localWarrantyImagePath,
+    String? disposedDate,
+    String? disposedTo,
+    String? disposedNotes,
+    String? disposedImagePath,
   }) {
     return AssetStockModel(
       id: id ?? this.id,
@@ -267,6 +293,14 @@ class AssetStockModel {
 
       localWarrantyImagePath:
           localWarrantyImagePath ?? this.localWarrantyImagePath,
+
+      disposedDate: disposedDate ?? this.disposedDate,
+
+      disposedTo: disposedTo ?? this.disposedTo,
+
+      disposedNotes: disposedNotes ?? this.disposedNotes,
+
+      disposedImagePath: disposedImagePath ?? this.disposedImagePath,
 
       isSynced: isSynced ?? this.isSynced,
 

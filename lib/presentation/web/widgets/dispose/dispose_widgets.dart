@@ -1,5 +1,149 @@
 part of '../../../pages/web_asset_dashboard_page.dart';
 
+class _DisposeEvidencePicker extends StatelessWidget {
+  final Uint8List? bytes;
+  final String? existingImagePath;
+  final String? fileName;
+  final bool enabled;
+  final VoidCallback onPick;
+  final VoidCallback? onRemove;
+
+  const _DisposeEvidencePicker({
+    required this.bytes,
+    required this.existingImagePath,
+    required this.fileName,
+    required this.enabled,
+    required this.onPick,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasExisting = existingImagePath?.trim().isNotEmpty == true;
+    final hasPreview = bytes != null || hasExisting;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xfffff8f8), Color(0xfffffcfc)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xffffd3d5)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 560;
+          final preview = ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: bytes != null
+                ? WebAssetMemoryImage(
+                    bytes: bytes!,
+                    width: compact ? constraints.maxWidth : 132,
+                    height: 100,
+                    viewerTitle: 'Image after disposal',
+                  )
+                : WebAssetImage(
+                    path: existingImagePath,
+                    width: compact ? constraints.maxWidth : 132,
+                    height: 100,
+                    viewerTitle: 'Image after disposal',
+                  ),
+          );
+
+          final details = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(
+                    Icons.add_a_photo_outlined,
+                    color: Color(0xffe5484d),
+                    size: 21,
+                  ),
+                  SizedBox(width: 9),
+                  Text(
+                    'Image After Dispose',
+                    style: TextStyle(
+                      color: Color(0xff16243c),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Attach clear visual evidence of the asset condition after disposal.',
+                style: TextStyle(
+                  color: Color(0xff718096),
+                  fontSize: 11.5,
+                  height: 1.4,
+                ),
+              ),
+              if (fileName?.trim().isNotEmpty == true) ...[
+                const SizedBox(height: 7),
+                Text(
+                  fileName!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xff3b5b92),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 11),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: enabled ? onPick : null,
+                    icon: Icon(
+                      hasPreview
+                          ? Icons.change_circle_outlined
+                          : Icons.upload_file_outlined,
+                      size: 18,
+                    ),
+                    label: Text(hasPreview ? 'Replace image' : 'Choose image'),
+                  ),
+                  if (onRemove != null)
+                    TextButton.icon(
+                      onPressed: enabled ? onRemove : null,
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Remove'),
+                    ),
+                ],
+              ),
+            ],
+          );
+
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (hasPreview) ...[preview, const SizedBox(height: 14)],
+                details,
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (hasPreview) ...[preview, const SizedBox(width: 16)],
+              Expanded(child: details),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _DisposedHeroCard extends StatelessWidget {
   final int totalAssets;
   final String? selectedBranch;
@@ -286,7 +430,7 @@ class _ModernDisposedTableHeader extends StatelessWidget {
       ),
       child: const Row(
         children: [
-          SizedBox(width: 56, child: _ModernDisposedHeaderText('Photo')),
+          SizedBox(width: 56, child: _ModernDisposedHeaderText('After photo')),
           Expanded(flex: 2, child: _ModernDisposedHeaderText('Asset Tag ID')),
           Expanded(flex: 3, child: _ModernDisposedHeaderText('Asset Details')),
           Expanded(flex: 2, child: _ModernDisposedHeaderText('Status')),
@@ -433,7 +577,18 @@ class _ModernDisposedAssetRowState extends State<_ModernDisposedAssetRow> {
                             width: 56,
                             child: Hero(
                               tag: 'disposed-image-${asset.itemCode}',
-                              child: _AssetImage(path: asset.imagePath),
+                              child: Tooltip(
+                                message:
+                                    asset.disposedImagePath
+                                            ?.trim()
+                                            .isNotEmpty ==
+                                        true
+                                    ? 'Image after disposal — click to enlarge'
+                                    : 'No after-disposal image recorded',
+                                child: _AssetImage(
+                                  path: asset.disposedImagePath,
+                                ),
+                              ),
                             ),
                           ),
 

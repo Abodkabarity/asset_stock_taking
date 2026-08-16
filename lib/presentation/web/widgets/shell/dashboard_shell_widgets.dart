@@ -31,7 +31,9 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final branchValue = selectedBranch ?? '__all__';
     final branchItems = ['__all__', ...alphabetizedWebOptions(branches)];
-    final compactActions = MediaQuery.sizeOf(context).width < 1500;
+    final availableWidth = MediaQuery.sizeOf(context).width - 270;
+    final compactActions = availableWidth < 1450;
+    final compactProfile = availableWidth < 1660;
 
     final currentTitle = titleOverride ?? _title;
     final currentSubtitle = subtitleOverride ?? _subtitle;
@@ -156,7 +158,7 @@ class _TopBar extends StatelessWidget {
                 const SizedBox(width: 10),
                 Container(width: 1, height: 34, color: AppColors.border),
                 const SizedBox(width: 12),
-                const _HeaderProfile(),
+                _HeaderProfile(compact: compactProfile),
               ],
             ),
           ),
@@ -274,7 +276,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton> {
                   alignment: Alignment.center,
                   gaplessPlayback: true,
                   filterQuality: FilterQuality.high,
-                  errorBuilder: (_, __, ___) => const Icon(
+                  errorBuilder: (context, error, stackTrace) => const Icon(
                     Icons.local_pharmacy_rounded,
                     color: Color(0xFF1278ED),
                     size: 28,
@@ -424,7 +426,9 @@ class _HeaderRefreshButtonState extends State<_HeaderRefreshButton> {
 }
 
 class _HeaderProfile extends StatefulWidget {
-  const _HeaderProfile();
+  final bool compact;
+
+  const _HeaderProfile({this.compact = false});
 
   @override
   State<_HeaderProfile> createState() => _HeaderProfileState();
@@ -435,56 +439,208 @@ class _HeaderProfileState extends State<_HeaderProfile> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => hovered = true),
-      onExit: (_) => setState(() => hovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.fromLTRB(5, 5, 10, 5),
-        decoration: BoxDecoration(
-          color: hovered ? AppColors.blueSoft.withValues(alpha: .75) : null,
-          borderRadius: BorderRadius.circular(24),
-          border: hovered ? Border.all(color: const Color(0xFFCEE2FF)) : null,
-        ),
-        child: Row(
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 240),
-              width: 39,
-              height: 39,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [AppColors.primaryColor, AppColors.cyan],
-                ),
-                boxShadow: hovered
-                    ? const [
-                        BoxShadow(
-                          color: Color(0x5500BDEB),
-                          blurRadius: 16,
-                          offset: Offset(0, 6),
-                        ),
-                      ]
-                    : null,
+    return ValueListenableBuilder<WebAppUser?>(
+      valueListenable: WebAuthSession.currentUser,
+      builder: (context, user, _) => PopupMenuButton<String>(
+        tooltip: 'Account menu',
+        offset: const Offset(0, 52),
+        color: Colors.white,
+        elevation: 12,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        onSelected: (value) async {
+          if (value != 'sign_out') return;
+          await WebAuthRepository().signOut();
+        },
+        itemBuilder: (_) => [
+          PopupMenuItem<String>(
+            enabled: false,
+            child: SizedBox(
+              width: 220,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user?.userName ?? 'Administrator',
+                    style: const TextStyle(
+                      color: AppColors.headerText,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    user?.email ?? '',
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.subText,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
-              child: const Icon(Icons.person_outline, color: Colors.white),
             ),
-            const SizedBox(width: 10),
-            const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+          const PopupMenuDivider(),
+          const PopupMenuItem<String>(
+            value: 'sign_out',
+            child: Row(
               children: [
+                Icon(Icons.logout_rounded, size: 19, color: Color(0xFFE5485D)),
+                SizedBox(width: 10),
                 Text(
-                  'Al Ain Team',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                Text(
-                  'Administrator',
-                  style: TextStyle(fontSize: 11, color: AppColors.subText),
+                  'Sign out',
+                  style: TextStyle(
+                    color: Color(0xFFE5485D),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
-          ],
+          ),
+        ],
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => setState(() => hovered = true),
+          onExit: (_) => setState(() => hovered = false),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            padding: widget.compact
+                ? EdgeInsets.zero
+                : const EdgeInsets.fromLTRB(5, 5, 10, 5),
+            decoration: BoxDecoration(
+              color: !widget.compact && hovered
+                  ? AppColors.blueSoft.withValues(alpha: .75)
+                  : null,
+              borderRadius: BorderRadius.circular(24),
+              border: !widget.compact && hovered
+                  ? Border.all(color: const Color(0xFFCEE2FF))
+                  : null,
+            ),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 240),
+                  constraints: BoxConstraints(
+                    minWidth: widget.compact ? 145 : 39,
+                    maxWidth: widget.compact ? 172 : 39,
+                  ),
+                  height: 39,
+                  padding: widget.compact
+                      ? const EdgeInsets.fromLTRB(6, 5, 8, 5)
+                      : EdgeInsets.zero,
+                  transform: Matrix4.translationValues(
+                    0,
+                    widget.compact && hovered ? -2 : 0,
+                    0,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(
+                      widget.compact ? 20 : 999,
+                    ),
+                    gradient: const LinearGradient(
+                      colors: [AppColors.primaryColor, AppColors.cyan],
+                    ),
+                    boxShadow: hovered
+                        ? const [
+                            BoxShadow(
+                              color: Color(0x5500BDEB),
+                              blurRadius: 16,
+                              offset: Offset(0, 6),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: widget.compact
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 29,
+                              height: 29,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: .2),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: .32),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.person_outline_rounded,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                user?.userName ?? 'Administrator',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            AnimatedRotation(
+                              turns: hovered ? .5 : 0,
+                              duration: const Duration(milliseconds: 220),
+                              child: const Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Center(
+                          child: Text(
+                            user?.initials ?? 'AP',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                ),
+                if (!widget.compact) ...[
+                  const SizedBox(width: 10),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 112,
+                        child: Text(
+                          user?.userName ?? 'Administrator',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      Text(
+                        user?.roleLabel ?? 'Administrator',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.subText,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 5),
+                  const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: AppColors.subText,
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -541,7 +697,7 @@ class _Sidebar extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Asset Pharmacy',
+                        'Asset Managment',
                         maxLines: 1,
                         style: TextStyle(
                           color: Colors.white,

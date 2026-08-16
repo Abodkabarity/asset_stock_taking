@@ -79,7 +79,9 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
     warrantySerialController = TextEditingController(
       text: widget.asset.warrantySerialNo,
     );
-    status = widget.asset.status.isEmpty ? 'New' : widget.asset.status;
+    status = widget.asset.status.trim().isEmpty
+        ? 'New'
+        : widget.asset.status.trim();
     hasWarranty = widget.asset.hasWarranty;
     assetImageUrl = widget.asset.imagePath;
     warrantyImageUrl = widget.asset.warrantyImagePath;
@@ -183,6 +185,22 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
         'warranty_serial_no': hasWarranty ? warrantySerialController.text : '',
       },
     );
+    await repository.addActivityLog(
+      itemCode: widget.asset.itemCode,
+      action: 'asset_updated',
+      description: 'Asset details updated',
+      fromBranch: widget.asset.location,
+      toBranch: widget.asset.location,
+      metadata: {
+        'previous_status': widget.asset.status,
+        'status': status,
+        'name': nameController.text,
+        'brand': brandController.text,
+        'model': modelController.text,
+        'serial_no': serialController.text,
+        'has_warranty': hasWarranty,
+      },
+    );
 
     if (!mounted) return;
 
@@ -202,6 +220,35 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
     } else {
       Navigator.pop(context);
     }
+  }
+
+  List<String> get _statusOptions {
+    const standardStatuses = <String>[
+      'Bad',
+      'Checked Out',
+      'Damaged',
+      'Disposed',
+      'Good',
+      'Maintenance',
+      'New',
+      'Reserved',
+      'Very Good',
+    ];
+    final uniqueStatuses = <String, String>{};
+    for (final option in standardStatuses) {
+      uniqueStatuses[option.toLowerCase()] = option;
+    }
+
+    final currentStatus = status.trim();
+    if (currentStatus.isNotEmpty) {
+      // Keep the exact value stored on the asset so DropdownButton always has
+      // exactly one matching item, even for legacy or operational statuses.
+      uniqueStatuses[currentStatus.toLowerCase()] = currentStatus;
+    }
+
+    final options = uniqueStatuses.values.toList(growable: false);
+    options.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return options;
   }
 
   @override
@@ -311,30 +358,17 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 14),
                                   child: DropdownButtonFormField<String>(
+                                    key: ValueKey('edit-status-$status'),
                                     initialValue: status,
                                     decoration: _decoration('Status'),
-                                    items: const [
-                                      DropdownMenuItem(
-                                        value: 'Bad',
-                                        child: Text('Bad'),
-                                      ),
-                                      DropdownMenuItem(
-                                        value: 'Disposed',
-                                        child: Text('Disposed'),
-                                      ),
-                                      DropdownMenuItem(
-                                        value: 'Good',
-                                        child: Text('Good'),
-                                      ),
-                                      DropdownMenuItem(
-                                        value: 'Maintenance',
-                                        child: Text('Maintenance'),
-                                      ),
-                                      DropdownMenuItem(
-                                        value: 'New',
-                                        child: Text('New'),
-                                      ),
-                                    ],
+                                    items: _statusOptions
+                                        .map(
+                                          (option) => DropdownMenuItem<String>(
+                                            value: option,
+                                            child: Text(option),
+                                          ),
+                                        )
+                                        .toList(growable: false),
                                     onChanged: (value) {
                                       if (value == null) return;
                                       setState(() {

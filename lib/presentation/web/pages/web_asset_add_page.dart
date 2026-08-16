@@ -253,6 +253,22 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
           'image_path': imageUrl,
         },
       );
+      await repository.addActivityLogs(
+        itemCodes: createdCodes,
+        action: widget.inventoryMode ? 'inventory_created' : 'asset_created',
+        description: widget.inventoryMode
+            ? 'Inventory item created'
+            : 'Asset created',
+        toBranch: targetBranch,
+        metadata: {
+          'asset_code': item.itemCode,
+          'quantity': createdCodes.length,
+          'name': descriptionController.text.trim().isEmpty
+              ? item.name
+              : descriptionController.text.trim(),
+          'status': status,
+        },
+      );
 
       if (!mounted) return;
       setState(() => saving = false);

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -11,6 +12,8 @@ import '../../core/services/barcode_print_service.dart';
 import '../../core/utils/asset_classification_utils.dart';
 import '../../data/models/asset_stock_model.dart';
 import '../web/data/web_asset_repository.dart';
+import '../web/auth/web_auth_repository.dart';
+import '../web/auth/web_auth_session.dart';
 import '../web/pages/web_asset_add_page.dart';
 import '../web/pages/web_asset_edit_page.dart';
 import '../web/pages/web_asset_view_page.dart';
@@ -1318,22 +1321,40 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     }
   }
 
-  Future<void> _disposeAsset(AssetStockModel asset) async {
-    await webRepository.updateStatus(
+  Future<void> _disposeAsset(
+    AssetStockModel asset, {
+    Uint8List? afterImageBytes,
+    String? afterImageFileName,
+  }) async {
+    final updatingExisting = asset.status.trim().toLowerCase() == 'disposed';
+    String? afterImageUrl = asset.disposedImagePath;
+    if (afterImageBytes != null && afterImageFileName != null) {
+      afterImageUrl = await webRepository.uploadDisposalImage(
+        itemCode: asset.itemCode,
+        bytes: afterImageBytes,
+        fileName: afterImageFileName,
+      );
+    }
+
+    await webRepository.disposeAsset(
       itemCode: asset.itemCode,
-      status: 'Disposed',
+      disposedDate: disposeDateController.text,
+      disposedTo: disposeToController.text,
+      notes: disposeNotesController.text,
+      afterImageUrl: afterImageUrl,
     );
     await webRepository.addActivityLog(
       itemCode: asset.itemCode,
-      action: 'dispose',
+      action: updatingExisting ? 'dispose_update' : 'dispose',
       description: disposeNotesController.text.isEmpty
-          ? 'Disposed asset'
+          ? (updatingExisting ? 'Updated disposal evidence' : 'Disposed asset')
           : disposeNotesController.text,
       fromBranch: asset.location,
       toBranch: asset.location,
       metadata: {
         'dispose_to': disposeToController.text,
         'disposed_date': disposeDateController.text,
+        'disposed_image_path': afterImageUrl,
       },
     );
 
@@ -1427,8 +1448,45 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   Future<bool> _openDisposeDetailsDialog(AssetStockModel asset) async {
+    final updatingExisting = asset.status.trim().toLowerCase() == 'disposed';
     _resetDisposeForm();
-    disposeDateController.text = _formatPickerDate(DateTime.now());
+    disposeDateController.text = asset.disposedDate.trim().isEmpty
+        ? _formatPickerDate(DateTime.now())
+        : _formatDisplayDate(asset.disposedDate);
+    disposeToController.text = asset.disposedTo;
+    disposeNotesController.text = asset.disposedNotes;
+
+    Uint8List? afterImageBytes;
+    String? afterImageFileName;
+    var saving = false;
+
+    Future<void> pickAfterImage(StateSetter setDialogState) async {
+      final result = await FilePicker.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.single;
+      final bytes = file.bytes;
+      if (bytes == null) return;
+      if (bytes.lengthInBytes > 10 * 1024 * 1024) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('The disposal image must be smaller than 10 MB'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+
+      setDialogState(() {
+        afterImageBytes = bytes;
+        afterImageFileName = file.name;
+      });
+    }
 
     final saved = await showDialog<bool>(
       context: context,
@@ -1467,7 +1525,11 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Dispose Asset'),
+                        Text(
+                          updatingExisting
+                              ? 'Update Disposal Record'
+                              : 'Dispose Asset',
+                        ),
                         const SizedBox(height: 3),
                         Text(
                           '${asset.name} | ${asset.itemCode}',
@@ -1488,105 +1550,159 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                 ],
               ),
               content: SizedBox(
-                width: 760,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xfffffbfb),
-                        border: Border.all(color: AppColors.border),
-                        borderRadius: BorderRadius.circular(8),
+                width: 800,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xfffffbfb),
+                          border: Border.all(color: AppColors.border),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            _AssetImage(path: asset.imagePath),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Wrap(
+                                spacing: 24,
+                                runSpacing: 8,
+                                children: [
+                                  _DialogInfo(
+                                    label: 'Status',
+                                    value: asset.status,
+                                  ),
+                                  _DialogInfo(
+                                    label: 'Location',
+                                    value: asset.location,
+                                  ),
+                                  _DialogInfo(
+                                    label: 'Category',
+                                    value: asset.category,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Row(
+                      const SizedBox(height: 18),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _AssetImage(path: asset.imagePath),
-                          const SizedBox(width: 14),
                           Expanded(
-                            child: Wrap(
-                              spacing: 24,
-                              runSpacing: 8,
+                            child: Column(
                               children: [
-                                _DialogInfo(
-                                  label: 'Status',
-                                  value: asset.status,
+                                _DateTextField(
+                                  controller: disposeDateController,
+                                  label: 'Date Disposed *',
+                                  onTap: () => _pickDateInto(
+                                    disposeDateController,
+                                    setDialogState,
+                                  ),
                                 ),
-                                _DialogInfo(
-                                  label: 'Location',
-                                  value: asset.location,
-                                ),
-                                _DialogInfo(
-                                  label: 'Category',
-                                  value: asset.category,
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: disposeToController,
+                                  decoration: _inputDecoration(
+                                    'Disposed to / recipient',
+                                  ),
                                 ),
                               ],
                             ),
                           ),
+                          const SizedBox(width: 18),
+                          Expanded(
+                            child: TextField(
+                              controller: disposeNotesController,
+                              minLines: 5,
+                              maxLines: 5,
+                              decoration: _inputDecoration(
+                                'Reason for disposal / notes',
+                              ),
+                            ),
+                          ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            children: [
-                              _DateTextField(
-                                controller: disposeDateController,
-                                label: 'Date Disposed *',
-                                onTap: () => _pickDateInto(
-                                  disposeDateController,
-                                  setDialogState,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              TextField(
-                                controller: disposeToController,
-                                decoration: _inputDecoration('Dispose to'),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 18),
-                        Expanded(
-                          child: TextField(
-                            controller: disposeNotesController,
-                            minLines: 5,
-                            maxLines: 5,
-                            decoration: _inputDecoration('Notes'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                      _DisposeEvidencePicker(
+                        bytes: afterImageBytes,
+                        existingImagePath: asset.disposedImagePath,
+                        fileName: afterImageFileName,
+                        enabled: !saving,
+                        onPick: () => pickAfterImage(setDialogState),
+                        onRemove: afterImageBytes == null
+                            ? null
+                            : () => setDialogState(() {
+                                afterImageBytes = null;
+                                afterImageFileName = null;
+                              }),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: [
                 OutlinedButton(
-                  onPressed: () => Navigator.pop(context, false),
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.pop(context, false),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton.icon(
-                  onPressed: () async {
-                    if (disposeDateController.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Date Disposed is required'),
-                        ),
-                      );
-                      return;
-                    }
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          if (disposeDateController.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Date Disposed is required'),
+                              ),
+                            );
+                            return;
+                          }
 
-                    await _disposeAsset(asset);
-                    if (!context.mounted) return;
-                    Navigator.pop(context, true);
-                  },
-                  icon: const Icon(Icons.delete_outline, color: Colors.white),
-                  label: const Text(
-                    'Dispose',
-                    style: TextStyle(color: Colors.white),
+                          setDialogState(() => saving = true);
+                          try {
+                            await _disposeAsset(
+                              asset,
+                              afterImageBytes: afterImageBytes,
+                              afterImageFileName: afterImageFileName,
+                            );
+                            if (!context.mounted) return;
+                            Navigator.pop(context, true);
+                          } catch (error) {
+                            if (!context.mounted) return;
+                            setDialogState(() => saving = false);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Unable to save disposal: $error',
+                                ),
+                                backgroundColor: Colors.red.shade700,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        },
+                  icon: saving
+                      ? const SizedBox(
+                          width: 17,
+                          height: 17,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.delete_outline, color: Colors.white),
+                  label: Text(
+                    saving
+                        ? 'Saving evidence...'
+                        : (updatingExisting ? 'Update Disposal' : 'Dispose'),
+                    style: const TextStyle(color: Colors.white),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,

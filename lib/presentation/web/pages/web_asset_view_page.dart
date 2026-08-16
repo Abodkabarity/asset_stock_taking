@@ -304,9 +304,17 @@ class _MoreActionsButton extends StatelessWidget {
     AssetStockModel asset,
     String status,
   ) async {
-    await WebAssetRepository().updateStatus(
+    final repository = WebAssetRepository();
+    await repository.updateStatus(itemCode: asset.itemCode, status: status);
+    await repository.addActivityLog(
       itemCode: asset.itemCode,
-      status: status,
+      action: status.toLowerCase() == 'maintenance'
+          ? 'maintenance_status'
+          : 'dispose_status',
+      description: 'Status changed from ${asset.status} to $status',
+      fromBranch: asset.location,
+      toBranch: asset.location,
+      metadata: {'previous_status': asset.status, 'status': status},
     );
 
     if (!context.mounted) return;
@@ -726,34 +734,159 @@ class _AuditTab extends StatelessWidget {
   }
 }
 
-class _HistoryTab extends StatelessWidget {
+class _HistoryTab extends StatefulWidget {
   final AssetStockModel asset;
 
   const _HistoryTab({required this.asset});
 
   @override
-  Widget build(BuildContext context) {
-    final events = [
-      _HistoryEvent(
-        title: 'Asset Created',
-        date: _dateTime(asset.createdAt),
-        details: asset.location,
-      ),
-      _HistoryEvent(
-        title: 'Current Status',
-        date: _dateTime(asset.createdAt),
-        details: asset.status,
-      ),
-      _HistoryEvent(
-        title: 'Current Location',
-        date: _dateTime(asset.createdAt),
-        details: asset.location,
-      ),
-    ];
+  State<_HistoryTab> createState() => _HistoryTabState();
+}
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: events.map((event) => event).toList(),
+class _HistoryTabState extends State<_HistoryTab> {
+  final repository = WebAssetRepository();
+  late Future<List<Map<String, dynamic>>> historyFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    historyFuture = repository.getAssetActivityLogs(widget.asset.itemCode);
+  }
+
+  @override
+  void didUpdateWidget(covariant _HistoryTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.asset.itemCode != widget.asset.itemCode) {
+      historyFuture = repository.getAssetActivityLogs(widget.asset.itemCode);
+    }
+  }
+
+  void _refresh() {
+    setState(() {
+      historyFuture = repository.getAssetActivityLogs(widget.asset.itemCode);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: historyFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 190,
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(strokeWidth: 2.5),
+                  SizedBox(height: 12),
+                  Text(
+                    'Loading complete asset history...',
+                    style: TextStyle(color: AppColors.subText),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final records = snapshot.data ?? const <Map<String, dynamic>>[];
+        final hasCreationRecord = records.any((record) {
+          final action = record['action']?.toString().toLowerCase() ?? '';
+          return action == 'asset_created' || action == 'inventory_created';
+        });
+        final events = <_HistoryEvent>[
+          for (final record in records) _HistoryEvent.fromRecord(record),
+          if (!hasCreationRecord)
+            _HistoryEvent(
+              action: 'asset_created',
+              title: 'Asset Created',
+              date: _dateTime(widget.asset.createdAt),
+              details:
+                  'Initial record created at ${widget.asset.location}. User information was not recorded for this legacy event.',
+              userName: 'Legacy record',
+            ),
+        ];
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: const Color(0xffedf3ff),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: const Icon(
+                    Icons.manage_history_rounded,
+                    color: AppColors.primaryColor,
+                    size: 21,
+                  ),
+                ),
+                const SizedBox(width: 11),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Complete Activity History',
+                        style: TextStyle(
+                          color: AppColors.headerText,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Every web operation and the user who performed it',
+                        style: TextStyle(
+                          color: AppColors.subText,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xfff3f6fb),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Text(
+                    '${events.length} events',
+                    style: const TextStyle(
+                      color: Color(0xff60718a),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Refresh history',
+                  onPressed: _refresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            for (var index = 0; index < events.length; index++)
+              _HistoryTimelineItem(
+                event: events[index],
+                isLast: index == events.length - 1,
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -780,39 +913,339 @@ class _PhotoTile extends StatelessWidget {
   }
 }
 
-class _HistoryEvent extends StatelessWidget {
+class _HistoryEvent {
+  final String action;
   final String title;
   final String date;
   final String details;
+  final String userName;
+  final String? fromBranch;
+  final String? toBranch;
 
   const _HistoryEvent({
+    required this.action,
     required this.title,
     required this.date,
     required this.details,
+    required this.userName,
+    this.fromBranch,
+    this.toBranch,
   });
+
+  factory _HistoryEvent.fromRecord(Map<String, dynamic> record) {
+    final action = record['action']?.toString().trim() ?? '';
+    final createdAt = DateTime.tryParse(
+      record['created_at']?.toString() ?? '',
+    )?.toLocal();
+    return _HistoryEvent(
+      action: action,
+      title: _historyActionTitle(action),
+      date: createdAt == null ? '-' : _dateTime(createdAt),
+      details: record['description']?.toString().trim().isNotEmpty == true
+          ? record['description'].toString().trim()
+          : _historyActionTitle(action),
+      userName: record['user_name']?.toString().trim().isNotEmpty == true
+          ? record['user_name'].toString().trim()
+          : 'System / legacy',
+      fromBranch: record['from_branch']?.toString(),
+      toBranch: record['to_branch']?.toString(),
+    );
+  }
+}
+
+class _HistoryTimelineItem extends StatefulWidget {
+  final _HistoryEvent event;
+  final bool isLast;
+
+  const _HistoryTimelineItem({required this.event, required this.isLast});
+
+  @override
+  State<_HistoryTimelineItem> createState() => _HistoryTimelineItemState();
+}
+
+class _HistoryTimelineItemState extends State<_HistoryTimelineItem> {
+  bool hovered = false;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.only(bottom: 18),
+    final event = widget.event;
+    final color = _historyActionColor(event.action);
+    final route = _historyRoute(event.fromBranch, event.toBranch);
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => hovered = true),
+      onExit: (_) => setState(() => hovered = false),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.history, size: 18, color: AppColors.primaryColor),
-          const SizedBox(width: 12),
           SizedBox(
-            width: 170,
-            child: Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            width: 42,
+            child: Column(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: hovered ? 38 : 34,
+                  height: hovered ? 38 : 34,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: hovered ? 0.17 : 0.10),
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(
+                      color: color.withValues(alpha: hovered ? 0.42 : 0.20),
+                    ),
+                  ),
+                  child: Icon(
+                    _historyActionIcon(event.action),
+                    color: color,
+                    size: 19,
+                  ),
+                ),
+                if (!widget.isLast)
+                  Container(
+                    width: 2,
+                    height: 62,
+                    color: const Color(0xffe5ebf4),
+                  ),
+              ],
             ),
           ),
-          SizedBox(width: 170, child: Text(date)),
-          Expanded(child: Text(details)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+              decoration: BoxDecoration(
+                color: hovered ? color.withValues(alpha: 0.045) : Colors.white,
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(
+                  color: hovered
+                      ? color.withValues(alpha: 0.26)
+                      : const Color(0xffe5ebf4),
+                ),
+                boxShadow: hovered
+                    ? [
+                        BoxShadow(
+                          color: color.withValues(alpha: 0.08),
+                          blurRadius: 18,
+                          spreadRadius: -7,
+                          offset: const Offset(0, 8),
+                        ),
+                      ]
+                    : const [],
+              ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 650;
+                  final activity = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        event.title,
+                        style: const TextStyle(
+                          color: AppColors.headerText,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        event.details,
+                        style: const TextStyle(
+                          color: Color(0xff66758d),
+                          fontSize: 11.5,
+                          height: 1.4,
+                        ),
+                      ),
+                      if (route != null) ...[
+                        const SizedBox(height: 7),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.route_outlined,
+                              size: 14,
+                              color: Color(0xff7c8ba1),
+                            ),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                route,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Color(0xff65758d),
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  );
+                  final actor = Column(
+                    crossAxisAlignment: compact
+                        ? CrossAxisAlignment.start
+                        : CrossAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xffedf4ff),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.person_outline_rounded,
+                              color: AppColors.primaryColor,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              event.userName,
+                              style: const TextStyle(
+                                color: Color(0xff2457ad),
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        event.date,
+                        style: const TextStyle(
+                          color: AppColors.subText,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  );
+
+                  if (compact) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [activity, const SizedBox(height: 11), actor],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: activity),
+                      const SizedBox(width: 18),
+                      actor,
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
+}
+
+String _historyActionTitle(String action) {
+  switch (action.trim().toLowerCase()) {
+    case 'asset_created':
+      return 'Asset Created';
+    case 'inventory_created':
+      return 'Inventory Created';
+    case 'asset_updated':
+      return 'Asset Updated';
+    case 'transfer':
+      return 'Asset Moved';
+    case 'dispose':
+      return 'Asset Disposed';
+    case 'dispose_update':
+      return 'Disposal Record Updated';
+    case 'maintenance':
+      return 'Maintenance Added';
+    case 'maintenance_update':
+    case 'maintenance_status':
+    case 'maintenance_schedule_updated':
+      return 'Maintenance Updated';
+    case 'maintenance_snoozed':
+      return 'Maintenance Postponed';
+    case 'maintenance_completed':
+      return 'Maintenance Completed';
+    case 'check_out':
+      return 'Asset Checked Out';
+    case 'check_in':
+      return 'Asset Checked In';
+    case 'reserve':
+      return 'Asset Reserved';
+    case 'unreserve':
+      return 'Reservation Released';
+    case 'reserve_transfer':
+      return 'Reserved Asset Transferred';
+    case 'dispose_status':
+      return 'Disposal Status Changed';
+    default:
+      final words = action.replaceAll('_', ' ').trim();
+      return words.isEmpty ? 'Asset Activity' : words;
+  }
+}
+
+IconData _historyActionIcon(String action) {
+  switch (action.trim().toLowerCase()) {
+    case 'asset_created':
+    case 'inventory_created':
+      return Icons.add_box_outlined;
+    case 'asset_updated':
+      return Icons.edit_outlined;
+    case 'transfer':
+    case 'reserve_transfer':
+      return Icons.swap_horiz_rounded;
+    case 'dispose':
+    case 'dispose_update':
+    case 'dispose_status':
+      return Icons.delete_outline_rounded;
+    case 'maintenance':
+    case 'maintenance_update':
+    case 'maintenance_status':
+      return Icons.build_outlined;
+    case 'check_out':
+      return Icons.assignment_ind_outlined;
+    case 'check_in':
+      return Icons.assignment_return_outlined;
+    case 'reserve':
+    case 'unreserve':
+      return Icons.bookmark_outline_rounded;
+    default:
+      return Icons.history_rounded;
+  }
+}
+
+Color _historyActionColor(String action) {
+  final value = action.trim().toLowerCase();
+  if (value.contains('dispose')) return const Color(0xffe5484d);
+  if (value.contains('maintenance')) return const Color(0xfff59f00);
+  if (value.contains('reserve')) return const Color(0xff7950f2);
+  if (value.contains('check')) return const Color(0xff0ca678);
+  if (value.contains('transfer') || value == 'move') {
+    return const Color(0xff4263eb);
+  }
+  return AppColors.primaryColor;
+}
+
+String? _historyRoute(String? from, String? to) {
+  final cleanFrom = from?.trim() ?? '';
+  final cleanTo = to?.trim() ?? '';
+  if (cleanFrom.isEmpty && cleanTo.isEmpty) return null;
+  if (cleanFrom.isNotEmpty && cleanTo.isNotEmpty && cleanFrom != cleanTo) {
+    return '$cleanFrom → $cleanTo';
+  }
+  return cleanTo.isNotEmpty ? cleanTo : cleanFrom;
 }
 
 class _EmptyTab extends StatelessWidget {

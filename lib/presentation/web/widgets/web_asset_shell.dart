@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../pages/web_asset_dashboard_page.dart';
+import '../auth/web_auth_repository.dart';
+import '../auth/web_auth_session.dart';
 
 enum WebShellSection {
   dashboard,
@@ -140,31 +142,69 @@ class _ShellTopBar extends StatelessWidget {
           const SizedBox(width: 14),
           Container(width: 1, height: 34, color: AppColors.border),
           const SizedBox(width: 14),
-          Container(
-            width: 38,
-            height: 38,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [AppColors.primaryColor, AppColors.cyan],
+          ValueListenableBuilder<WebAppUser?>(
+            valueListenable: WebAuthSession.currentUser,
+            builder: (context, user, _) => PopupMenuButton<String>(
+              tooltip: 'Account menu',
+              offset: const Offset(0, 48),
+              onSelected: (value) async {
+                if (value == 'sign_out') await WebAuthRepository().signOut();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem<String>(
+                  value: 'sign_out',
+                  child: Row(
+                    children: [
+                      Icon(Icons.logout_rounded, color: Color(0xFFE5485D)),
+                      SizedBox(width: 9),
+                      Text('Sign out'),
+                    ],
+                  ),
+                ),
+              ],
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [AppColors.primaryColor, AppColors.cyan],
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        user?.initials ?? 'AP',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user?.userName ?? 'Administrator',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      Text(
+                        user?.roleLabel ?? 'Administrator',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.subText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            child: const Icon(Icons.person_outline, color: Colors.white),
-          ),
-          const SizedBox(width: 10),
-          const Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Al Ain Team',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              Text(
-                'Administrator',
-                style: TextStyle(fontSize: 11, color: AppColors.subText),
-              ),
-            ],
           ),
         ],
       ),

@@ -1,5 +1,4 @@
 import 'package:asset_stock_taking/presentation/pages/select_branch_page.dart';
-import 'package:asset_stock_taking/presentation/pages/web_asset_dashboard_page.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -10,6 +9,7 @@ import 'core/constants/supabase_constants.dart';
 import 'core/constants/app_colors.dart';
 import 'injection_container.dart';
 import 'presentation/bloc/asset_bloc.dart';
+import 'presentation/web/auth/web_auth_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -101,7 +101,7 @@ class MyApp extends StatelessWidget {
           dividerTheme: const DividerThemeData(color: AppColors.border),
         ),
 
-        home: kIsWeb ? const WebAssetDashboardPage() : const SelectBranchPage(),
+        home: kIsWeb ? const WebAuthGate() : const SelectBranchPage(),
       ),
     );
   }

@@ -4,12 +4,22 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../data/models/asset_item_model.dart';
 import '../../../data/models/asset_stock_model.dart';
+import '../auth/web_auth_session.dart';
 
 class WebAssetRepository {
   final SupabaseClient supabase;
 
   WebAssetRepository({SupabaseClient? supabase})
     : supabase = supabase ?? Supabase.instance.client;
+
+  Map<String, dynamic> get _activityActor {
+    final actor = WebAuthSession.currentUser.value;
+    return {
+      'user_id': actor?.id,
+      'user_name': actor?.userName ?? 'System',
+      'user_role': actor?.role ?? 'system',
+    };
+  }
 
   Future<List<String>> getBranches() async {
     final response = await supabase
@@ -24,19 +34,36 @@ class WebAssetRepository {
   }
 
   Future<List<AssetStockModel>> getAssets() async {
-    final response = await supabase
-        .from('asset_stock_taking')
-        .select(
-          'id,name,asset_code,item_code,category,sub_category,cost,'
-          'classification,asset_classification,asset_inventory,location,'
-          'status,image_path,brand,model,serial_no,description,has_warranty,'
-          'warranty_description,warranty_start_date,warranty_end_date,'
-          'warranty_serial_no,warranty_image_path,created_at',
-        )
-        .order('created_at', ascending: false);
+    const baseColumns =
+        'id,name,asset_code,item_code,category,sub_category,cost,'
+        'classification,asset_classification,asset_inventory,location,'
+        'status,image_path,brand,model,serial_no,description,has_warranty,'
+        'warranty_description,warranty_start_date,warranty_end_date,'
+        'warranty_serial_no,warranty_image_path,created_at';
+    const disposalColumns =
+        '$baseColumns,disposed_date,disposed_to,disposed_notes,'
+        'disposed_image_path';
+
+    List<dynamic> response;
+    try {
+      response = await supabase
+          .from('asset_stock_taking')
+          .select(disposalColumns)
+          .order('created_at', ascending: false);
+    } on PostgrestException catch (error) {
+      // Keep the web registry operational until the local disposal migration
+      // is deliberately applied to the correct Supabase project.
+      if (error.code != '42703') rethrow;
+      response = await supabase
+          .from('asset_stock_taking')
+          .select(baseColumns)
+          .order('created_at', ascending: false);
+    }
 
     return response
-        .map<AssetStockModel>((e) => AssetStockModel.fromJson(e))
+        .map<AssetStockModel>(
+          (e) => AssetStockModel.fromJson(Map<String, dynamic>.from(e as Map)),
+        )
         .toList();
   }
 
@@ -46,6 +73,23 @@ class WebAssetRepository {
           .from('asset_activity_log')
           .select()
           .inFilter('action', const ['transfer', 'reserve_transfer'])
+          .order('created_at', ascending: false);
+      return response
+          .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAssetActivityLogs(
+    String itemCode,
+  ) async {
+    try {
+      final response = await supabase
+          .from('asset_activity_log')
+          .select()
+          .eq('item_code', itemCode)
           .order('created_at', ascending: false);
       return response
           .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
@@ -410,6 +454,7 @@ class WebAssetRepository {
             assets
                 .map(
                   (asset) => {
+                    ..._activityActor,
                     'item_code': asset.itemCode,
                     'action': 'transfer',
                     'description':
@@ -446,6 +491,25 @@ class WebAssetRepository {
     await supabase
         .from('asset_stock_taking')
         .update({'status': status})
+        .eq('item_code', itemCode);
+  }
+
+  Future<void> disposeAsset({
+    required String itemCode,
+    required String disposedDate,
+    required String disposedTo,
+    required String notes,
+    String? afterImageUrl,
+  }) async {
+    await supabase
+        .from('asset_stock_taking')
+        .update({
+          'status': 'Disposed',
+          'disposed_date': _dateOrNull(disposedDate),
+          'disposed_to': disposedTo.trim(),
+          'disposed_notes': notes.trim(),
+          'disposed_image_path': afterImageUrl,
+        })
         .eq('item_code', itemCode);
   }
 
@@ -655,6 +719,7 @@ class WebAssetRepository {
     Map<String, dynamic>? metadata,
   }) async {
     await supabase.from('asset_activity_log').insert({
+      ..._activityActor,
       'item_code': itemCode,
       'action': action,
       'description': description,
@@ -662,6 +727,40 @@ class WebAssetRepository {
       'to_branch': toBranch,
       'metadata': metadata ?? {},
     });
+  }
+
+  Future<void> addActivityLogs({
+    required List<String> itemCodes,
+    required String action,
+    required String description,
+    String? fromBranch,
+    String? toBranch,
+    Map<String, dynamic>? metadata,
+  }) async {
+    final uniqueCodes = itemCodes
+        .map((code) => code.trim())
+        .where((code) => code.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (uniqueCodes.isEmpty) return;
+
+    await supabase
+        .from('asset_activity_log')
+        .insert(
+          uniqueCodes
+              .map(
+                (itemCode) => {
+                  ..._activityActor,
+                  'item_code': itemCode,
+                  'action': action,
+                  'description': description,
+                  'from_branch': fromBranch,
+                  'to_branch': toBranch,
+                  'metadata': metadata ?? const <String, dynamic>{},
+                },
+              )
+              .toList(growable: false),
+        );
   }
 
   Future<void> addMaintenanceRecord({
@@ -766,6 +865,31 @@ class WebAssetRepository {
           bytes,
           fileOptions: FileOptions(
             upsert: true,
+            contentType: _contentType(safeExtension),
+          ),
+        );
+
+    return supabase.storage.from('asset-images').getPublicUrl(storagePath);
+  }
+
+  Future<String> uploadDisposalImage({
+    required String itemCode,
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    final extension = fileName.split('.').last.toLowerCase();
+    final safeExtension = extension.isEmpty ? 'jpg' : extension;
+    final safeItemCode = itemCode.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final storagePath =
+        'disposals/${DateTime.now().millisecondsSinceEpoch}_${safeItemCode}_after.$safeExtension';
+
+    await supabase.storage
+        .from('asset-images')
+        .uploadBinary(
+          storagePath,
+          bytes,
+          fileOptions: FileOptions(
+            upsert: false,
             contentType: _contentType(safeExtension),
           ),
         );

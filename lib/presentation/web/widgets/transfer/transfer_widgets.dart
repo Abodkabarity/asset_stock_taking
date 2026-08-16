@@ -1552,7 +1552,10 @@ class _TransferHistoryTableHeader extends StatelessWidget {
         SizedBox(width: 52),
         Expanded(flex: 2, child: _ModernTransferHeaderText('To Branch')),
         Expanded(flex: 2, child: _ModernTransferHeaderText('Moved On')),
-        Expanded(flex: 3, child: _ModernTransferHeaderText('Movement')),
+        Expanded(
+          flex: 3,
+          child: _ModernTransferHeaderText('Movement / Performed by'),
+        ),
       ],
     ),
   );
@@ -1586,6 +1589,9 @@ class _TransferHistoryRowState extends State<_TransferHistoryRow> {
     final from = _value('from_branch');
     final to = _value('to_branch');
     final description = _value('description');
+    final performedBy = _value('user_name').isEmpty
+        ? 'System'
+        : _value('user_name');
 
     return MouseRegion(
       onEnter: (_) => setState(() => hovered = true),
@@ -1687,18 +1693,46 @@ class _TransferHistoryRowState extends State<_TransferHistoryRow> {
             ),
             Expanded(
               flex: 3,
-              child: Text(
-                description.isEmpty
-                    ? 'Transferred from $from to $to'
-                    : description,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xff6d7a8e),
-                  fontSize: 11,
-                  height: 1.35,
-                  fontWeight: FontWeight.w500,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    description.isEmpty
+                        ? 'Transferred from $from to $to'
+                        : description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xff6d7a8e),
+                      fontSize: 11,
+                      height: 1.35,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.verified_user_outlined,
+                        size: 13,
+                        color: Color(0xff1ea97c),
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          performedBy,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xff1b8062),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
