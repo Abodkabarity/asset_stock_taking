@@ -217,7 +217,7 @@ class _WebSignInPageState extends State<WebSignInPage>
               _AuthTextField(
                 controller: emailController,
                 label: 'Email address',
-                hint: 'name@alainpharmacy.ae',
+                hint: 'name@alain-pharmacy.com',
                 icon: Icons.alternate_email_rounded,
                 keyboardType: TextInputType.emailAddress,
                 validator: (value) {
@@ -318,7 +318,7 @@ class _WebSignInPageState extends State<WebSignInPage>
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12),
                     child: Text(
-                      'SECURE ADMIN ACCESS',
+                      'SECURE ACCESS',
                       style: TextStyle(
                         color: AppColors.subText,
                         fontSize: 10,
@@ -328,22 +328,6 @@ class _WebSignInPageState extends State<WebSignInPage>
                     ),
                   ),
                   Expanded(child: Divider()),
-                ],
-              ),
-              const SizedBox(height: 18),
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.shield_outlined,
-                    color: Color(0xFF2CB67D),
-                    size: 18,
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    'Protected by Supabase authentication',
-                    style: TextStyle(color: AppColors.subText, fontSize: 12),
-                  ),
                 ],
               ),
             ],
@@ -452,7 +436,7 @@ class _SignInButtonState extends State<_SignInButton> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Sign in securely',
+                        'Sign In',
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
