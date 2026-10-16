@@ -34,13 +34,15 @@ class AssetStateBadges extends StatelessWidget {
           Icons.verified_outlined,
           conditionColor,
         ),
-        const SizedBox(height: 5),
-        _badge(
-          'Availability',
-          asset.operationalStatus,
-          Icons.work_outline_rounded,
-          operationColor,
-        ),
+        if (!asset.isAvailable) ...[
+          const SizedBox(height: 5),
+          _badge(
+            'Availability',
+            asset.operationalStatus,
+            Icons.work_outline_rounded,
+            operationColor,
+          ),
+        ],
       ],
     );
   }
