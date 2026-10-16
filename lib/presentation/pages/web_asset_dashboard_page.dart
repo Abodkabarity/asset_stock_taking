@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:asset_stock_taking/presentation/widgets/branch_dropdown.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import 'package:printing/printing.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/services/asset_excel_service.dart';
+import '../../core/services/transfer_excel_service.dart';
 import '../../core/services/barcode_print_service.dart';
 import '../../core/utils/asset_classification_utils.dart';
 import '../../data/models/asset_stock_model.dart';
@@ -1203,12 +1205,10 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                       ],
                     ),
                     const SizedBox(height: 18),
-                    DropdownButtonFormField<String>(
-                      initialValue: branch,
+                    BranchDropdown(
+                      value: branch,
                       decoration: _inputDecoration('Branch'),
-                      items: alphabetizedWebOptions(branches).map((item) {
-                        return DropdownMenuItem(value: item, child: Text(item));
-                      }).toList(),
+                      branches: branches,
                       onChanged: (value) async {
                         if (value == null) return;
 

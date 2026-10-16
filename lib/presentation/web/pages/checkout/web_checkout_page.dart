@@ -509,21 +509,13 @@ extension _CheckoutPageExtension on _WebAssetDashboardPageState {
                         ],
                       )
                     else
-                      DropdownButtonFormField<String>(
-                        initialValue: assignedLocation,
-                        isExpanded: true,
+                      BranchDropdown(
+                        value: assignedLocation,
                         decoration: const InputDecoration(
                           labelText: 'Assign to location *',
                           border: OutlineInputBorder(),
                         ),
-                        items: alphabetizedWebOptions(branches)
-                            .map(
-                              (branch) => DropdownMenuItem(
-                                value: branch,
-                                child: Text(branch),
-                              ),
-                            )
-                            .toList(),
+                        branches: branches,
                         onChanged: (value) => setDialogState(() {
                           assignedLocation = value;
                           assignee = value;

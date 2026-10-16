@@ -4,12 +4,14 @@ class _TransferHeroCard extends StatelessWidget {
   final String title;
   final int totalAssets;
   final String? selectedBranch;
+  final VoidCallback onExport;
   final VoidCallback onSelectAssets;
 
   const _TransferHeroCard({
     required this.title,
     required this.totalAssets,
     required this.selectedBranch,
+    required this.onExport,
     required this.onSelectAssets,
   });
 
@@ -205,6 +207,12 @@ class _TransferHeroCard extends StatelessWidget {
                       runSpacing: 10,
                       alignment: WrapAlignment.end,
                       children: [
+                        _MaintenanceHeroButton(
+                          icon: Icons.file_download_outlined,
+                          label: 'Export',
+                          filled: false,
+                          onTap: onExport,
+                        ),
                         _MaintenanceHeroButton(
                           icon: Icons.add_box_outlined,
                           label: 'Select Asset',
@@ -510,25 +518,14 @@ class _TransferAssetPickerDialogState
                   const SizedBox(width: 12),
                   Expanded(
                     flex: 2,
-                    child: DropdownButtonFormField<String>(
-                      key: ValueKey(sourceLocation),
-                      initialValue: sourceLocation,
-                      isExpanded: true,
+                    child: BranchDropdown(
+                      value: sourceLocation,
                       decoration: const InputDecoration(
                         labelText: 'Current location',
                         prefixIcon: Icon(Icons.warehouse_outlined),
                       ),
-                      items: widget.locations
-                          .map(
-                            (location) => DropdownMenuItem(
-                              value: location,
-                              child: Text(
-                                location,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
-                          .toList(growable: false),
+                      branches: widget.locations,
+
                       onChanged: _changeSource,
                     ),
                   ),
@@ -956,22 +953,14 @@ class _TransferQuantityPanel extends StatelessWidget {
           const SizedBox(width: 18),
           Expanded(
             flex: 2,
-            child: DropdownButtonFormField<String>(
-              key: ValueKey(destination),
-              initialValue: destination,
-              isExpanded: true,
+            child: BranchDropdown(
+              value: destination,
               decoration: const InputDecoration(
                 labelText: 'Move to branch',
                 prefixIcon: Icon(Icons.location_on_outlined),
               ),
-              items: destinationOptions
-                  .map(
-                    (location) => DropdownMenuItem(
-                      value: location,
-                      child: Text(location, overflow: TextOverflow.ellipsis),
-                    ),
-                  )
-                  .toList(growable: false),
+              branches: destinationOptions,
+
               onChanged: onDestinationChanged,
             ),
           ),

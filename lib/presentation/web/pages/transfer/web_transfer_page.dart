@@ -65,6 +65,7 @@ extension _TransferPageExtension on _WebAssetDashboardPageState {
             title: 'Move Assets',
             totalAssets: records.length,
             selectedBranch: selectedBranch,
+            onExport: () => _exportTransferHistory(records),
             onSelectAssets: _openTransferAssetPicker,
           ),
           const SizedBox(height: 18),
@@ -279,6 +280,31 @@ extension _TransferPageExtension on _WebAssetDashboardPageState {
         ],
       ),
     );
+  }
+
+  Future<void> _exportTransferHistory(
+    List<Map<String, dynamic>> records,
+  ) async {
+    if (records.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No movements available to export')),
+      );
+      return;
+    }
+    try {
+      await TransferExcelService.exportTransfers(
+        records: records,
+        assetNames: {for (final asset in assets) asset.itemCode: asset.name},
+        fileName: selectedBranch == null
+            ? 'asset_movements'
+            : '${selectedBranch}_asset_movements',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to export movements: $error')),
+      );
+    }
   }
 
   String _transferDateLabel(dynamic value) {

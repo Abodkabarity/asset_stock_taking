@@ -1,3 +1,4 @@
+import 'package:asset_stock_taking/presentation/widgets/branch_dropdown.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -987,13 +988,10 @@ class _DropdownField extends StatelessWidget {
     final sortedItems = alphabetizedWebOptions(items);
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
-      child: DropdownButtonFormField<String>(
-        initialValue: value,
-        isExpanded: true,
+      child: BranchDropdown(
+        value: value,
         decoration: _decoration(label),
-        items: sortedItems.map((item) {
-          return DropdownMenuItem(value: item, child: Text(item));
-        }).toList(),
+        branches: sortedItems,
         onChanged: onChanged,
       ),
     );

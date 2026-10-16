@@ -1,3 +1,4 @@
+import 'package:asset_stock_taking/presentation/widgets/branch_dropdown.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
@@ -384,15 +385,13 @@ class _MoreActionsButton extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 18),
-                    DropdownButtonFormField<String>(
-                      initialValue: branch,
+                    BranchDropdown(
+                      value: branch,
                       decoration: const InputDecoration(
                         labelText: 'To Branch',
                         border: OutlineInputBorder(),
                       ),
-                      items: alphabetizedWebOptions(branches).map((item) {
-                        return DropdownMenuItem(value: item, child: Text(item));
-                      }).toList(),
+                      branches: branches,
                       onChanged: (value) async {
                         if (value == null) return;
                         setDialogState(() {

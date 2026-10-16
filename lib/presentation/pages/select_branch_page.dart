@@ -1,3 +1,4 @@
+import 'package:asset_stock_taking/presentation/widgets/branch_dropdown.dart';
 import 'package:asset_stock_taking/presentation/pages/select_project_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -158,17 +159,10 @@ class _SelectBranchPageState extends State<SelectBranchPage> {
                         ),
                       const SizedBox(height: 30),
 
-                      DropdownButtonFormField<String>(
-                        initialValue: selectedBranch,
+                      BranchDropdown(
+                        value: selectedBranch,
 
-                        items: state.branches.map((e) {
-                          return DropdownMenuItem<String>(
-                            value: e,
-
-                            child: Text(e),
-                          );
-                        }).toList(),
-
+                        branches: state.branches,
                         onChanged: (v) {
                           selectedBranch = v;
 

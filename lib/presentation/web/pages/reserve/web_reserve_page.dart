@@ -289,21 +289,13 @@ extension _ReservePageExtension on _WebAssetDashboardPageState {
                         ],
                       )
                     else
-                      DropdownButtonFormField<String>(
-                        initialValue: targetLocation,
-                        isExpanded: true,
+                      BranchDropdown(
+                        value: targetLocation,
                         decoration: const InputDecoration(
                           labelText: 'Location to reserve for *',
                           border: OutlineInputBorder(),
                         ),
-                        items: alphabetizedWebOptions(branches)
-                            .map(
-                              (branch) => DropdownMenuItem(
-                                value: branch,
-                                child: Text(branch),
-                              ),
-                            )
-                            .toList(),
+                        branches: branches,
                         onChanged: (value) => setDialogState(() {
                           targetLocation = value;
                           reservedFor = value;
@@ -313,21 +305,13 @@ extension _ReservePageExtension on _WebAssetDashboardPageState {
                     Row(
                       children: [
                         Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: targetLocation,
-                            isExpanded: true,
+                          child: BranchDropdown(
+                            value: targetLocation,
                             decoration: const InputDecoration(
                               labelText: 'Transfer destination *',
                               border: OutlineInputBorder(),
                             ),
-                            items: alphabetizedWebOptions(branches)
-                                .map(
-                                  (branch) => DropdownMenuItem(
-                                    value: branch,
-                                    child: Text(branch),
-                                  ),
-                                )
-                                .toList(),
+                            branches: branches,
                             onChanged: (value) => setDialogState(() {
                               targetLocation = value;
                               if (reserveForType == 'Location') {

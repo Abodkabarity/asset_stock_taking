@@ -137,25 +137,15 @@ class _MultiAssetSearchDialogState extends State<_MultiAssetSearchDialog> {
                 ),
                 const SizedBox(width: 14),
                 Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: selectedBranch,
-                    isExpanded: true,
+                  child: BranchDropdown(
+                    value: selectedBranch,
                     decoration: const InputDecoration(
                       labelText: 'Location',
                       border: OutlineInputBorder(),
                     ),
-                    items: [
-                      const DropdownMenuItem<String>(
-                        value: null,
-                        child: Text('All Locations'),
-                      ),
-                      ...alphabetizedWebOptions(widget.branches).map(
-                        (branch) => DropdownMenuItem<String>(
-                          value: branch,
-                          child: Text(branch, overflow: TextOverflow.ellipsis),
-                        ),
-                      ),
-                    ],
+                    branches: widget.branches,
+                    includeAllBranches: true,
+                    allBranchesLabel: 'All Locations',
                     onChanged: (value) =>
                         setState(() => selectedBranch = value),
                   ),

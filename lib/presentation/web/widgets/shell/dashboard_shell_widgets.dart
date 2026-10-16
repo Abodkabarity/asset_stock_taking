@@ -331,10 +331,8 @@ class _HeaderBranchSelectorState extends State<_HeaderBranchSelector> {
                 ]
               : null,
         ),
-        child: DropdownButtonFormField<String>(
-          key: ValueKey(widget.value),
-          initialValue: widget.value,
-          isExpanded: true,
+        child: BranchDropdown(
+          value: widget.value,
           decoration: InputDecoration(
             labelText: 'Branch',
             isDense: true,
@@ -357,17 +355,11 @@ class _HeaderBranchSelectorState extends State<_HeaderBranchSelector> {
               ),
             ),
           ),
-          items: widget.items
-              .map((branch) {
-                return DropdownMenuItem(
-                  value: branch,
-                  child: Text(
-                    branch == '__all__' ? 'All Branches' : branch,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                );
-              })
-              .toList(growable: false),
+          branches: widget.items
+              .where((branch) => branch != '__all__')
+              .toList(),
+          includeAllBranches: true,
+          allBranchesValue: '__all__',
           onChanged: widget.onChanged,
         ),
       ),
