@@ -691,12 +691,10 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
 
             /// STATUS
             DropdownButtonFormField<String>(
-              initialValue: StatusList.statuses.contains(selectedStatus)
-                  ? selectedStatus
-                  : null,
+              initialValue: selectedStatus,
 
               decoration: InputDecoration(
-                labelText: 'Status',
+                labelText: 'Physical condition',
 
                 filled: true,
 
@@ -721,7 +719,7 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                 ),
               ),
 
-              items: StatusList.statuses.map((e) {
+              items: {...StatusList.statuses, selectedStatus}.map((e) {
                 return DropdownMenuItem(value: e, child: Text(e));
               }).toList(),
 
@@ -896,6 +894,11 @@ class _AssetEditDialogState extends State<AssetEditDialog> {
                           projectName: widget.asset.projectName,
 
                           status: selectedStatus,
+                          operationalStatus: widget.asset.operationalStatus,
+                          conditionRevision: widget.asset.conditionRevision,
+                          hasPendingConditionChange:
+                              widget.asset.hasPendingConditionChange ||
+                              selectedStatus != widget.asset.status,
 
                           brand: brandController.text,
 

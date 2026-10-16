@@ -6,7 +6,10 @@ import '../models/asset_item_model.dart';
 import '../models/asset_stock_model.dart';
 
 class AssetRemoteDatasource {
-  final supabase = Supabase.instance.client;
+  final SupabaseClient supabase;
+
+  AssetRemoteDatasource({SupabaseClient? supabase})
+    : supabase = supabase ?? Supabase.instance.client;
 
   Future<List<AssetItemModel>> getMasterItems() async {
     final response = await supabase.from('asset_master').select().order('name');
@@ -46,6 +49,7 @@ class AssetRemoteDatasource {
         'location': item.location,
         'project_name': item.projectName,
         'status': item.status,
+        'operational_status': item.operationalStatus,
         'brand': item.brand,
         'model': item.model,
         'serial_no': item.serialNo,
@@ -178,7 +182,10 @@ class AssetRemoteDatasource {
 
         'project_name': e.projectName,
 
-        'status': e.status,
+        // A legacy offline cache may not know the restored physical condition.
+        // Do not replace a verified server condition with that unknown value.
+        if (e.id == null || !e.needsConditionReview) 'status': e.status,
+        'condition_revision': e.conditionRevisionForUpload,
 
         'brand': e.brand,
 
@@ -210,9 +217,18 @@ class AssetRemoteDatasource {
     /// UPSERT
     /// =========================
     if (uploadItems.isNotEmpty) {
-      await supabase
-          .from('asset_stock_taking')
-          .upsert(uploadItems, onConflict: 'item_code');
+      // PostgREST uses the union of batch keys. Keep rows without a known
+      // condition in a separate batch so a missing status never becomes null.
+      for (final includesCondition in [true, false]) {
+        final batch = uploadItems
+            .where((row) => row.containsKey('status') == includesCondition)
+            .toList();
+        if (batch.isNotEmpty) {
+          await supabase
+              .from('asset_stock_taking')
+              .upsert(batch, onConflict: 'item_code');
+        }
+      }
 
       print('UPLOAD SUCCESS');
     }

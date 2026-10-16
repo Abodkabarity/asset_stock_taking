@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/utils/asset_status.dart';
 import '../../../data/models/asset_item_model.dart';
 import '../../../data/models/asset_stock_model.dart';
 import '../auth/web_auth_session.dart';
@@ -11,6 +12,24 @@ class WebAssetRepository {
 
   WebAssetRepository({SupabaseClient? supabase})
     : supabase = supabase ?? Supabase.instance.client;
+
+  bool _separatedSchemaVerified = false;
+
+  Future<void> _requireOperationalSchema() async {
+    if (_separatedSchemaVerified) return;
+    try {
+      await supabase
+          .from('asset_stock_taking')
+          .select('operational_status')
+          .limit(1);
+      _separatedSchemaVerified = true;
+    } on PostgrestException catch (error) {
+      if (error.code != '42703' && error.code != 'PGRST204') rethrow;
+      throw StateError(
+        'The asset condition migration must be applied before using asset workflows.',
+      );
+    }
+  }
 
   Map<String, dynamic> get _activityActor {
     final actor = WebAuthSession.currentUser.value;
@@ -34,31 +53,10 @@ class WebAssetRepository {
   }
 
   Future<List<AssetStockModel>> getAssets() async {
-    const baseColumns =
-        'id,name,asset_code,item_code,category,sub_category,cost,'
-        'classification,asset_classification,asset_inventory,location,'
-        'status,image_path,brand,model,serial_no,description,has_warranty,'
-        'warranty_description,warranty_start_date,warranty_end_date,'
-        'warranty_serial_no,warranty_image_path,created_at';
-    const disposalColumns =
-        '$baseColumns,disposed_date,disposed_to,disposed_notes,'
-        'disposed_image_path';
-
-    List<dynamic> response;
-    try {
-      response = await supabase
-          .from('asset_stock_taking')
-          .select(disposalColumns)
-          .order('created_at', ascending: false);
-    } on PostgrestException catch (error) {
-      // Keep the web registry operational until the local disposal migration
-      // is deliberately applied to the correct Supabase project.
-      if (error.code != '42703') rethrow;
-      response = await supabase
-          .from('asset_stock_taking')
-          .select(baseColumns)
-          .order('created_at', ascending: false);
-    }
+    final response = await supabase
+        .from('asset_stock_taking')
+        .select()
+        .order('created_at', ascending: false);
 
     return response
         .map<AssetStockModel>(
@@ -379,16 +377,23 @@ class WebAssetRepository {
     required String itemCode,
     required String branch,
   }) async {
-    await supabase
+    await _requireOperationalSchema();
+    final updated = await supabase
         .from('asset_stock_taking')
         .update({'location': branch, 'project_name': ''})
-        .eq('item_code', itemCode);
+        .eq('operational_status', AssetStatus.available)
+        .eq('item_code', itemCode)
+        .select('item_code');
+    if (updated.isEmpty) {
+      throw StateError('This asset is no longer available for transfer.');
+    }
   }
 
   Future<void> transferAssetBatch({
     required List<AssetStockModel> assets,
     required String branch,
   }) async {
+    await _requireOperationalSchema();
     if (assets.isEmpty) return;
 
     final destination = branch.trim();
@@ -429,6 +434,7 @@ class WebAssetRepository {
         .from('asset_stock_taking')
         .update({'location': destination, 'project_name': ''})
         .eq('location', source)
+        .eq('operational_status', AssetStatus.available)
         .inFilter('item_code', itemCodes)
         .select('item_code');
     final updatedCodes = updatedRows
@@ -484,14 +490,46 @@ class WebAssetRepository {
     }
   }
 
-  Future<void> updateStatus({
+  Future<void> updateCondition({
     required String itemCode,
-    required String status,
+    required String condition,
+    required int expectedRevision,
   }) async {
-    await supabase
+    if (AssetStatus.legacyOperation(condition) != null) {
+      throw ArgumentError('Use operational status for asset workflows');
+    }
+    final updated = await supabase
         .from('asset_stock_taking')
-        .update({'status': status})
-        .eq('item_code', itemCode);
+        .update({
+          'status': condition,
+          'condition_revision': expectedRevision + 1,
+        })
+        .eq('item_code', itemCode)
+        .eq('condition_revision', expectedRevision)
+        .select('item_code');
+    if (updated.isEmpty) {
+      throw StateError(
+        'The condition changed on another device. Refresh and try again.',
+      );
+    }
+  }
+
+  Future<void> updateOperationalStatus({
+    required String itemCode,
+    required String operationalStatus,
+  }) async {
+    await _requireOperationalSchema();
+    final updated = await supabase
+        .from('asset_stock_taking')
+        .update({'operational_status': operationalStatus})
+        .eq('item_code', itemCode)
+        .eq('operational_status', AssetStatus.available)
+        .select('item_code');
+    if (updated.isEmpty) {
+      throw StateError(
+        'This asset is no longer available. Refresh and try again.',
+      );
+    }
   }
 
   Future<void> disposeAsset({
@@ -501,26 +539,53 @@ class WebAssetRepository {
     required String notes,
     String? afterImageUrl,
   }) async {
-    await supabase
+    await _requireOperationalSchema();
+    final updated = await supabase
         .from('asset_stock_taking')
         .update({
-          'status': 'Disposed',
+          'operational_status': AssetStatus.disposed,
           'disposed_date': _dateOrNull(disposedDate),
           'disposed_to': disposedTo.trim(),
           'disposed_notes': notes.trim(),
           'disposed_image_path': afterImageUrl,
         })
-        .eq('item_code', itemCode);
+        .eq('item_code', itemCode)
+        .inFilter('operational_status', [
+          AssetStatus.available,
+          AssetStatus.disposed,
+        ])
+        .select('item_code');
+    if (updated.isEmpty) {
+      throw StateError('This asset is no longer available for disposal.');
+    }
   }
 
   Future<void> updateAsset({
     required String itemCode,
     required Map<String, dynamic> values,
+    int? expectedConditionRevision,
   }) async {
-    await supabase
+    if (values.containsKey('status') &&
+        (expectedConditionRevision == null ||
+            AssetStatus.legacyOperation(values['status']?.toString() ?? '') !=
+                null)) {
+      throw ArgumentError(
+        'An explicit physical condition and its revision are required.',
+      );
+    }
+    var request = supabase
         .from('asset_stock_taking')
         .update(values)
         .eq('item_code', itemCode);
+    if (expectedConditionRevision != null) {
+      request = request.eq('condition_revision', expectedConditionRevision);
+    }
+    final updated = await request.select('item_code');
+    if (updated.isEmpty) {
+      throw StateError(
+        'The asset changed on another device. Refresh before saving.',
+      );
+    }
   }
 
   Future<List<Map<String, dynamic>>> getActiveCheckouts() async {
@@ -584,6 +649,7 @@ class WebAssetRepository {
     String assignedLocation = '',
     String department = '',
   }) async {
+    await _requireOperationalSchema();
     await supabase.from('asset_checkouts').insert({
       'item_code': asset.itemCode,
       'asset_name': asset.name,
@@ -598,7 +664,6 @@ class WebAssetRepository {
       'original_status': asset.status,
       'location': asset.location,
     });
-    await updateStatus(itemCode: asset.itemCode, status: 'Checked Out');
   }
 
   Future<List<Map<String, dynamic>>> getActiveReservations() async {
@@ -627,6 +692,7 @@ class WebAssetRepository {
     required String endDate,
     String notes = '',
   }) async {
+    await _requireOperationalSchema();
     await supabase.from('asset_reservations').insert({
       'item_code': asset.itemCode,
       'asset_name': asset.name,
@@ -641,12 +707,12 @@ class WebAssetRepository {
       'original_status': asset.status,
       'source_location': asset.location,
     });
-    await updateStatus(itemCode: asset.itemCode, status: 'Reserved');
   }
 
   Future<void> unreserveAsset({
     required Map<String, dynamic> reservation,
   }) async {
+    await _requireOperationalSchema();
     await supabase
         .from('asset_reservations')
         .update({
@@ -655,37 +721,16 @@ class WebAssetRepository {
           'resolution': 'unreserved',
         })
         .eq('id', reservation['id']);
-    await updateStatus(
-      itemCode: reservation['item_code']?.toString() ?? '',
-      status: reservation['original_status']?.toString().isNotEmpty == true
-          ? reservation['original_status'].toString()
-          : 'Good',
-    );
   }
 
   Future<void> transferReservedAsset({
     required Map<String, dynamic> reservation,
   }) async {
-    final destination = reservation['target_location']?.toString().trim() ?? '';
-    await supabase
-        .from('asset_stock_taking')
-        .update({
-          'location': destination,
-          'project_name': '',
-          'status':
-              reservation['original_status']?.toString().isNotEmpty == true
-              ? reservation['original_status'].toString()
-              : 'Good',
-        })
-        .eq('item_code', reservation['item_code']);
-    await supabase
-        .from('asset_reservations')
-        .update({
-          'is_active': false,
-          'released_at': DateTime.now().toIso8601String(),
-          'resolution': 'transferred',
-        })
-        .eq('id', reservation['id']);
+    await _requireOperationalSchema();
+    await supabase.rpc(
+      'asset_transfer_reservation',
+      params: {'p_reservation_id': reservation['id']},
+    );
   }
 
   Future<void> checkInAsset({
@@ -693,6 +738,7 @@ class WebAssetRepository {
     required String returnDate,
     String notes = '',
   }) async {
+    await _requireOperationalSchema();
     final checkoutId = checkout['id'];
     await supabase
         .from('asset_checkouts')
@@ -702,12 +748,6 @@ class WebAssetRepository {
           'checkin_notes': notes.trim(),
         })
         .eq('id', checkoutId);
-    await updateStatus(
-      itemCode: checkout['item_code']?.toString() ?? '',
-      status: checkout['original_status']?.toString().isNotEmpty == true
-          ? checkout['original_status'].toString()
-          : 'Good',
-    );
   }
 
   Future<void> addActivityLog({
@@ -774,6 +814,7 @@ class WebAssetRepository {
     required double cost,
     required bool repeating,
   }) async {
+    await _requireOperationalSchema();
     await supabase.from('asset_maintenance').insert({
       'item_code': asset.itemCode,
       'asset_name': asset.name,
@@ -794,6 +835,7 @@ class WebAssetRepository {
     required Object recordId,
     required Map<String, dynamic> values,
   }) async {
+    await _requireOperationalSchema();
     await supabase.from('asset_maintenance').update(values).eq('id', recordId);
   }
 

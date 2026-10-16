@@ -7,7 +7,7 @@ extension _MaintenancePageExtension on _WebAssetDashboardPageState {
     final maintenanceAssets =
         assets.where((asset) {
           return _matchesBranchAndSearch(asset, search) &&
-              asset.status.trim().toLowerCase() == 'maintenance';
+              asset.isInMaintenance;
         }).toList()..sort(
           (first, second) =>
               first.name.toLowerCase().compareTo(second.name.toLowerCase()),

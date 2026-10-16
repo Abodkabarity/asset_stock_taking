@@ -50,62 +50,7 @@ class LocalAssetDatasource {
         .map((e) {
           final item = Map<String, dynamic>.from(e);
 
-          return AssetStockModel(
-            id: item['id'],
-
-            name: item['name'],
-
-            assetCode: item['asset_code'],
-
-            itemCode: item['item_code'],
-
-            category: item['category'],
-
-            subCategory: item['sub_category'],
-
-            classification: item['classification'],
-
-            assetClassification: item['asset_classification'] ?? '',
-
-            assetInventory: item['asset_inventory'] ?? '',
-
-            location: item['location'],
-
-            projectName: item['project_name'],
-
-            status: item['status'],
-
-            brand: item['brand'],
-
-            model: item['model'],
-
-            serialNo: item['serial_no'],
-
-            description: item['description'] ?? '',
-
-            hasWarranty: item['has_warranty'] ?? false,
-
-            warrantyDescription: item['warranty_description'] ?? '',
-
-            warrantyImagePath: item['warranty_image_path'],
-
-            localWarrantyImagePath: item['local_warranty_image_path'],
-
-            isSynced: item['is_synced'] ?? false,
-
-            isDeleted: item['is_deleted'] ?? false,
-
-            imagePath: item['image_path'],
-
-            localImagePath: item['local_image_path'],
-
-            createdAt:
-                (DateTime.tryParse(item['created_at']?.toString() ?? '') ??
-                        DateTime.now())
-                    .toLocal(),
-
-            cost: (item['cost'] ?? 0).toDouble(),
-          );
+          return AssetStockModel.fromJson(item);
         })
         .toList();
 

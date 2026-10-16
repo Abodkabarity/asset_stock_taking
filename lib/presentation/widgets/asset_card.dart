@@ -1,3 +1,4 @@
+import 'asset_state_badges.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -184,17 +185,7 @@ class AssetCard extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              const TextSpan(text: 'Status: '),
-                              TextSpan(
-                                text: item.status,
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
+                        child: AssetStateBadges(asset: item),
                       ),
                       const SizedBox(width: 12),
                       Flexible(

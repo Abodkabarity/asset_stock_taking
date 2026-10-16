@@ -30,6 +30,7 @@ class AssetExcelService {
       TextCellValue('asset_classification'),
       TextCellValue('location'),
       TextCellValue('status'),
+      TextCellValue('operational_status'),
       TextCellValue('brand'),
       TextCellValue('model'),
       TextCellValue('serial_no'),
@@ -60,6 +61,7 @@ class AssetExcelService {
         TextCellValue(item.assetClassification),
         TextCellValue(item.location),
         TextCellValue(item.status),
+        TextCellValue(item.operationalStatus),
         TextCellValue(item.brand),
         TextCellValue(item.model),
         TextCellValue(item.serialNo),
@@ -95,9 +97,9 @@ class AssetExcelService {
       borderColorHex: ExcelColor.fromHexString('#FFD9E2F0'),
       borderStyle: BorderStyle.Thin,
     );
-    final columnCount = includeProject ? 23 : 22;
+    final columnCount = includeProject ? 24 : 23;
     for (var column = 0; column < columnCount; column++) {
-      sheet.setColumnWidth(column, column == 0 || column == 12 ? 28 : 18);
+      sheet.setColumnWidth(column, column == 0 || column == 13 ? 28 : 18);
       sheet
               .cell(
                 CellIndex.indexByColumnRow(columnIndex: column, rowIndex: 0),

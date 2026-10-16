@@ -423,7 +423,7 @@ class _ModernMaintenanceTableHeader extends StatelessWidget {
             flex: 3,
             child: _ModernMaintenanceHeaderText('Asset Details'),
           ),
-          Expanded(flex: 2, child: _ModernMaintenanceHeaderText('Status')),
+          Expanded(flex: 2, child: _ModernMaintenanceHeaderText('Condition / Availability')),
           Expanded(flex: 2, child: _ModernMaintenanceHeaderText('Location')),
           SizedBox(
             width: 146,
@@ -648,7 +648,7 @@ class _ModernMaintenanceAssetRowState
 
                           Expanded(
                             flex: 2,
-                            child: _StatusPill(status: asset.status),
+                            child: AssetStateBadges(asset: asset),
                           ),
 
                           Expanded(

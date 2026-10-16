@@ -12,6 +12,8 @@ import '../../core/services/asset_excel_service.dart';
 import '../../core/services/transfer_excel_service.dart';
 import '../../core/services/barcode_print_service.dart';
 import '../../core/utils/asset_classification_utils.dart';
+import '../../core/utils/asset_status.dart';
+import '../widgets/asset_state_badges.dart';
 import '../../data/models/asset_stock_model.dart';
 import '../web/data/web_asset_repository.dart';
 import '../web/auth/web_auth_repository.dart';
@@ -54,7 +56,6 @@ part '../web/widgets/common/panel_widget.dart';
 part '../web/widgets/common/pagination_widgets.dart';
 part '../web/widgets/common/print_widgets.dart';
 part '../web/widgets/common/status_color.dart';
-part '../web/widgets/common/status_pill.dart';
 part '../web/widgets/common/web_loading_view.dart';
 part '../web/widgets/dashboard/calendar_widgets.dart';
 part '../web/widgets/dashboard/dashboard_metric_widgets.dart';
@@ -134,6 +135,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   String? selectedBranch;
   String searchQuery = '';
   String? selectedStatus;
+  String? selectedOperationalStatus;
   DateTimeRange? selectedDateRange;
   String alertSearchQuery = '';
   String alertUrgencyFilter = 'All';
@@ -297,6 +299,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       registryLoading = opensRegistry;
       pendingSection = null;
       selectedStatus = null;
+      selectedOperationalStatus = null;
       selectedDateRange = null;
       selectedDetailAsset = null;
       editingAsset = null;
@@ -413,8 +416,11 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   bool _matchesSelectedStatus(AssetStockModel asset) {
-    return selectedStatus == null ||
-        asset.status.trim().toLowerCase() == selectedStatus!.toLowerCase();
+    return (selectedStatus == null ||
+            asset.status.trim().toLowerCase() ==
+                selectedStatus!.toLowerCase()) &&
+        (selectedOperationalStatus == null ||
+            asset.operationalStatus == selectedOperationalStatus);
   }
 
   bool _matchesSelectedDateRange(AssetStockModel asset) {
@@ -454,6 +460,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
         asset.subCategory.toLowerCase().contains(search) ||
         asset.brand.toLowerCase().contains(search) ||
         asset.status.toLowerCase().contains(search) ||
+        asset.operationalStatus.toLowerCase().contains(search) ||
         asset.location.toLowerCase().contains(search) ||
         asset.assetInventory.toLowerCase().contains(search);
   }
@@ -463,18 +470,11 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   bool _isRegularAsset(AssetStockModel asset) {
-    final status = asset.status.trim().toLowerCase();
-    final registerType = asset.assetInventory.trim().toLowerCase();
-    return status != 'disposed' &&
-        status != 'maintenance' &&
-        registerType == 'asset';
+    return asset.assetInventory.trim().toLowerCase() == 'asset';
   }
 
   bool _isOperationallyAvailable(AssetStockModel asset) {
-    final status = asset.status.trim().toLowerCase();
-    return _isRegularAsset(asset) &&
-        status != 'checked out' &&
-        status != 'reserved';
+    return _isRegularAsset(asset) && asset.isAvailable;
   }
 
   double get totalValue {
@@ -482,22 +482,20 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   int get activeCount {
-    return visibleAssets.length;
+    return visibleAssets.where((asset) => asset.isAvailable).length;
   }
 
   int get disposedCount {
     return assets.where((asset) {
       final search = searchQuery.trim().toLowerCase();
-      return _matchesBranchAndSearch(asset, search) &&
-          asset.status.toLowerCase() == 'disposed';
+      return _matchesBranchAndSearch(asset, search) && asset.isDisposed;
     }).length;
   }
 
   int get maintenanceCount {
     return assets.where((asset) {
       final search = searchQuery.trim().toLowerCase();
-      return _matchesBranchAndSearch(asset, search) &&
-          asset.status.toLowerCase() == 'maintenance';
+      return _matchesBranchAndSearch(asset, search) && asset.isInMaintenance;
     }).length;
   }
 
@@ -1152,12 +1150,12 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   Future<void> _transferAsset(AssetStockModel asset) async {
-    if (asset.status.trim().toLowerCase() == 'reserved') {
+    if (!asset.isAvailable) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'This asset is reserved. Use Reserve > Transfer or Unreserve first.',
+              'This asset is ${asset.operationalStatus}. Complete its current operation before transferring it.',
             ),
           ),
         );
@@ -1327,7 +1325,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     Uint8List? afterImageBytes,
     String? afterImageFileName,
   }) async {
-    final updatingExisting = asset.status.trim().toLowerCase() == 'disposed';
+    final updatingExisting = asset.isDisposed;
     String? afterImageUrl = asset.disposedImagePath;
     if (afterImageBytes != null && afterImageFileName != null) {
       afterImageUrl = await webRepository.uploadDisposalImage(
@@ -1377,10 +1375,6 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
       maintenanceBy: maintenanceByController.text,
       cost: cost,
       repeating: maintenanceRepeating,
-    );
-    await webRepository.updateStatus(
-      itemCode: asset.itemCode,
-      status: 'Maintenance',
     );
     await webRepository.addActivityLog(
       itemCode: asset.itemCode,
@@ -1449,7 +1443,17 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   Future<bool> _openDisposeDetailsDialog(AssetStockModel asset) async {
-    final updatingExisting = asset.status.trim().toLowerCase() == 'disposed';
+    if (!(asset.isAvailable || asset.isDisposed)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'This asset is ${asset.operationalStatus}. Complete its current operation first.',
+          ),
+        ),
+      );
+      return false;
+    }
+    final updatingExisting = asset.isDisposed;
     _resetDisposeForm();
     disposeDateController.text = asset.disposedDate.trim().isEmpty
         ? _formatPickerDate(DateTime.now())
@@ -1573,7 +1577,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                                 runSpacing: 8,
                                 children: [
                                   _DialogInfo(
-                                    label: 'Status',
+                                    label: 'Physical condition',
                                     value: asset.status,
                                   ),
                                   _DialogInfo(
@@ -2092,6 +2096,16 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
   }
 
   Future<bool> _openMaintenanceDetailsDialog(AssetStockModel asset) async {
+    if (!(asset.isAvailable || asset.isInMaintenance)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'This asset is ${asset.operationalStatus}. Complete its current operation first.',
+          ),
+        ),
+      );
+      return false;
+    }
     maintenanceTitleController.text = asset.name;
     maintenanceDetailsController.clear();
     maintenanceDueDateController.clear();
@@ -2183,7 +2197,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                               runSpacing: 8,
                               children: [
                                 _DialogInfo(
-                                  label: 'Status',
+                                  label: 'Physical condition',
                                   value: asset.status,
                                 ),
                                 _DialogInfo(

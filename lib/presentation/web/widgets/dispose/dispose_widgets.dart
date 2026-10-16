@@ -433,7 +433,7 @@ class _ModernDisposedTableHeader extends StatelessWidget {
           SizedBox(width: 56, child: _ModernDisposedHeaderText('After photo')),
           Expanded(flex: 2, child: _ModernDisposedHeaderText('Asset Tag ID')),
           Expanded(flex: 3, child: _ModernDisposedHeaderText('Asset Details')),
-          Expanded(flex: 2, child: _ModernDisposedHeaderText('Status')),
+          Expanded(flex: 2, child: _ModernDisposedHeaderText('Condition / Availability')),
           Expanded(flex: 2, child: _ModernDisposedHeaderText('Location')),
           SizedBox(
             width: 146,
@@ -668,7 +668,7 @@ class _ModernDisposedAssetRowState extends State<_ModernDisposedAssetRow> {
 
                           Expanded(
                             flex: 2,
-                            child: _StatusPill(status: asset.status),
+                            child: AssetStateBadges(asset: asset),
                           ),
 
                           Expanded(

@@ -585,7 +585,7 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
                                           ),
                                           DropdownButtonFormField<String>(
                                             initialValue: status,
-                                            decoration: _decoration('Status'),
+                                            decoration: _decoration('Physical condition'),
                                             items: const [
                                               DropdownMenuItem(
                                                 value: 'Bad',

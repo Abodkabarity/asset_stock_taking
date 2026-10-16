@@ -298,7 +298,7 @@ class _ModernTransferTableHeader extends StatelessWidget {
             flex: 3,
             child: _ModernTransferHeaderText('Asset Details'),
           ),
-          const Expanded(flex: 2, child: _ModernTransferHeaderText('Status')),
+          const Expanded(flex: 2, child: _ModernTransferHeaderText('Condition / Availability')),
           const Expanded(flex: 2, child: _ModernTransferHeaderText('Location')),
           SizedBox(
             width: 146,
@@ -522,7 +522,7 @@ class _ModernTransferAssetRowState extends State<_ModernTransferAssetRow> {
                           ),
                           Expanded(
                             flex: 2,
-                            child: _StatusPill(status: asset.status),
+                            child: AssetStateBadges(asset: asset),
                           ),
                           Expanded(
                             flex: 2,

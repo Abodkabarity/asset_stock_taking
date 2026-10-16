@@ -4,6 +4,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/asset_status.dart';
+import '../../widgets/asset_state_badges.dart';
 import '../../../data/models/asset_stock_model.dart';
 import '../data/web_asset_repository.dart';
 import '../utils/web_page_route.dart';
@@ -79,9 +81,7 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
     warrantySerialController = TextEditingController(
       text: widget.asset.warrantySerialNo,
     );
-    status = widget.asset.status.trim().isEmpty
-        ? 'New'
-        : widget.asset.status.trim();
+    status = widget.asset.status;
     hasWarranty = widget.asset.hasWarranty;
     assetImageUrl = widget.asset.imagePath;
     warrantyImageUrl = widget.asset.warrantyImagePath;
@@ -163,12 +163,16 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
 
     await repository.updateAsset(
       itemCode: widget.asset.itemCode,
+      expectedConditionRevision: widget.asset.conditionRevision,
       values: {
         'brand': brandController.text,
         'model': modelController.text,
         'serial_no': serialController.text,
         'cost': cost,
         'status': status,
+        'condition_revision':
+            widget.asset.conditionRevision +
+            (status == widget.asset.status ? 0 : 1),
         'description': descriptionController.text,
         'image_path': nextAssetImageUrl,
         'has_warranty': hasWarranty,
@@ -223,17 +227,7 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
   }
 
   List<String> get _statusOptions {
-    const standardStatuses = <String>[
-      'Bad',
-      'Checked Out',
-      'Damaged',
-      'Disposed',
-      'Good',
-      'Maintenance',
-      'New',
-      'Reserved',
-      'Very Good',
-    ];
+    const standardStatuses = AssetStatus.conditions;
     final uniqueStatuses = <String, String>{};
     for (final option in standardStatuses) {
       uniqueStatuses[option.toLowerCase()] = option;
@@ -357,10 +351,34 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
                                 ),
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 14),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      AssetStateBadges(asset: widget.asset),
+                                      if (widget
+                                          .asset
+                                          .needsConditionReview) ...[
+                                        const SizedBox(height: 10),
+                                        const Text(
+                                          'Previous condition could not be recovered. Inspect this asset and choose its physical condition.',
+                                          style: TextStyle(
+                                            color: Color(0xffaa6d12),
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 14),
                                   child: DropdownButtonFormField<String>(
                                     key: ValueKey('edit-status-$status'),
                                     initialValue: status,
-                                    decoration: _decoration('Status'),
+                                    decoration: _decoration(
+                                      'Physical condition',
+                                    ),
                                     items: _statusOptions
                                         .map(
                                           (option) => DropdownMenuItem<String>(

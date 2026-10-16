@@ -265,7 +265,7 @@ class _MultiAssetSearchDialogState extends State<_MultiAssetSearchDialog> {
                                               value: asset.location,
                                             ),
                                           ),
-                                          _StatusPill(status: asset.status),
+                                          AssetStateBadges(asset: asset),
                                         ],
                                       ),
                                     ),

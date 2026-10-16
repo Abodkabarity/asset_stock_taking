@@ -3,6 +3,8 @@ part of '../../../pages/web_asset_dashboard_page.dart';
 class _AssetRegistryToolbar extends StatelessWidget {
   final TextEditingController searchController;
   final String? selectedStatus;
+  final String? selectedOperationalStatus;
+  final ValueChanged<String?> onOperationalStatusChanged;
   final List<String> statuses;
   final int resultsCount;
   final bool hasFilters;
@@ -16,6 +18,8 @@ class _AssetRegistryToolbar extends StatelessWidget {
   const _AssetRegistryToolbar({
     required this.searchController,
     required this.selectedStatus,
+    required this.selectedOperationalStatus,
+    required this.onOperationalStatusChanged,
     required this.statuses,
     required this.resultsCount,
     required this.hasFilters,
@@ -91,7 +95,7 @@ class _AssetRegistryToolbar extends StatelessWidget {
           color: Color(0xff63738b),
         ),
         decoration: const InputDecoration(
-          labelText: 'Status',
+          labelText: 'Condition',
           labelStyle: TextStyle(color: Color(0xff8794a7), fontSize: 11),
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
@@ -102,7 +106,7 @@ class _AssetRegistryToolbar extends StatelessWidget {
           const DropdownMenuItem<String>(
             value: '__all__',
             child: Text(
-              'All Statuses',
+              'All conditions',
               style: TextStyle(
                 color: Color(0xff34435a),
                 fontSize: 12,
@@ -143,6 +147,40 @@ class _AssetRegistryToolbar extends StatelessWidget {
         onChanged: (value) {
           onStatusChanged(value == '__all__' ? null : value);
         },
+      ),
+    );
+
+    final availabilityFilter = Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 13),
+      decoration: BoxDecoration(
+        color: const Color(0xfff8fafd),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: const Color(0xffdfe7f2)),
+      ),
+      child: DropdownButtonFormField<String>(
+        key: ValueKey('availability-${selectedOperationalStatus ?? 'all'}'),
+        initialValue: selectedOperationalStatus ?? '__all__',
+        isExpanded: true,
+        style: const TextStyle(fontSize: 12, color: AppColors.text),
+        decoration: const InputDecoration(
+          labelText: 'Availability',
+          labelStyle: TextStyle(color: Color(0xff8794a7), fontSize: 11),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding: EdgeInsets.zero,
+        ),
+        items: [
+          const DropdownMenuItem(
+            value: '__all__',
+            child: Text('All availability'),
+          ),
+          for (final state in AssetStatus.operations)
+            DropdownMenuItem(value: state, child: Text(state)),
+        ],
+        onChanged: (value) =>
+            onOperationalStatusChanged(value == '__all__' ? null : value),
       ),
     );
 
@@ -234,30 +272,33 @@ class _AssetRegistryToolbar extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 850) {
+        if (constraints.maxWidth < 1100) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               searchField,
               const SizedBox(height: 10),
-              Row(
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Expanded(child: statusFilter),
-                  const SizedBox(width: 10),
+                  SizedBox(width: 190, child: statusFilter),
+                  SizedBox(width: 190, child: availabilityFilter),
                   resultBox,
-                  const SizedBox(width: 10),
                   clearButton,
                 ],
               ),
             ],
           );
         }
-
         return Row(
           children: [
             Expanded(child: searchField),
             const SizedBox(width: 11),
-            SizedBox(width: 190, child: statusFilter),
+            SizedBox(width: 170, child: statusFilter),
+            const SizedBox(width: 11),
+            SizedBox(width: 180, child: availabilityFilter),
             const SizedBox(width: 11),
             resultBox,
             const SizedBox(width: 9),

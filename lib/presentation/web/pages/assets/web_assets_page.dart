@@ -54,6 +54,7 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
     final hasFilters =
         searchQuery.trim().isNotEmpty ||
         selectedStatus != null ||
+        selectedOperationalStatus != null ||
         selectedDateRange != null;
 
     return TweenAnimationBuilder<double>(
@@ -208,6 +209,12 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
                           searchController: searchController,
                           inventoryMode: inventoryMode,
                           selectedStatus: selectedStatus,
+                          selectedOperationalStatus: selectedOperationalStatus,
+                          onOperationalStatusChanged: (value) =>
+                              _updateWebState(() {
+                                selectedOperationalStatus = value;
+                                _resetPage(section);
+                              }),
                           statuses: statuses,
                           resultsCount: filteredAssets.length,
                           hasFilters: hasFilters,
@@ -227,6 +234,7 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
                             _updateWebState(() {
                               searchQuery = '';
                               selectedStatus = null;
+                              selectedOperationalStatus = null;
                               selectedDateRange = null;
                               _resetPage(section);
                             });
@@ -279,6 +287,8 @@ extension _AssetsPageExtension on _WebAssetDashboardPageState {
                                                 _updateWebState(() {
                                                   searchQuery = '';
                                                   selectedStatus = null;
+                                                  selectedOperationalStatus =
+                                                      null;
                                                   selectedDateRange = null;
                                                   _resetPage(section);
                                                 });

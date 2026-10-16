@@ -7,7 +7,7 @@ extension _DisposePageExtension on _WebAssetDashboardPageState {
     final disposedAssets =
         assets.where((asset) {
           return _matchesBranchAndSearch(asset, search) &&
-              asset.status.trim().toLowerCase() == 'disposed';
+              asset.isDisposed;
         }).toList()..sort(
           (first, second) =>
               first.name.toLowerCase().compareTo(second.name.toLowerCase()),

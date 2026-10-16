@@ -896,12 +896,7 @@ extension _AlertsPageExtension on _WebAssetDashboardPageState {
       description: 'Maintenance completed from Alerts',
       metadata: {'completed_date': completedDate},
     );
-    if (asset != null) {
-      await webRepository.updateStatus(
-        itemCode: asset.itemCode,
-        status: 'Good',
-      );
-    }
+
     await _loadData();
   }
 

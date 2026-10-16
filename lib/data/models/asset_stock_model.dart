@@ -1,3 +1,5 @@
+import '../../core/utils/asset_status.dart';
+
 class AssetStockModel {
   final int? id;
 
@@ -26,6 +28,19 @@ class AssetStockModel {
   final String? localImagePath;
 
   final String status;
+
+  final String operationalStatus;
+  final int conditionRevision;
+  // Local-only intent. Repeated offline edits share the same server revision.
+  final bool hasPendingConditionChange;
+  int get conditionRevisionForUpload =>
+      conditionRevision + (hasPendingConditionChange ? 1 : 0);
+
+  bool get isAvailable => operationalStatus == AssetStatus.available;
+  bool get isInMaintenance => operationalStatus == AssetStatus.maintenance;
+  bool get isDisposed => operationalStatus == AssetStatus.disposed;
+  bool get isReserved => operationalStatus == AssetStatus.reserved;
+  bool get needsConditionReview => status == AssetStatus.unknown;
 
   final String? imagePath;
 
@@ -80,7 +95,10 @@ class AssetStockModel {
     required this.assetInventory,
     required this.location,
     required this.projectName,
-    required this.status,
+    required String status,
+    String? operationalStatus,
+    this.conditionRevision = 0,
+    this.hasPendingConditionChange = false,
     required this.brand,
     required this.model,
     required this.serialNo,
@@ -102,7 +120,11 @@ class AssetStockModel {
     this.imagePath,
     this.localImagePath,
     required this.cost,
-  });
+  }) : status = AssetStatus.condition(status),
+       operationalStatus = AssetStatus.operation(
+         operationalStatus,
+         legacyCondition: status,
+       );
 
   /// =========================================================
   /// TO JSON
@@ -121,6 +143,9 @@ class AssetStockModel {
       'location': location,
       'project_name': projectName,
       'status': status,
+      'operational_status': operationalStatus,
+      'condition_revision': conditionRevision,
+      'has_pending_condition_change': hasPendingConditionChange,
       'brand': brand,
       'model': model,
       'serial_no': serialNo,
@@ -169,6 +194,9 @@ class AssetStockModel {
       projectName: json['project_name']?.toString() ?? '',
 
       status: json['status']?.toString() ?? '',
+      operationalStatus: json['operational_status']?.toString(),
+      conditionRevision: (json['condition_revision'] as num?)?.toInt() ?? 0,
+      hasPendingConditionChange: json['has_pending_condition_change'] == true,
 
       brand: json['brand']?.toString() ?? '',
 
@@ -222,6 +250,10 @@ class AssetStockModel {
   /// COPY WITH
   /// =========================================================
   AssetStockModel copyWith({
+    String? status,
+    String? operationalStatus,
+    int? conditionRevision,
+    bool? hasPendingConditionChange,
     int? id,
     bool? isSynced,
     bool? isDeleted,
@@ -269,7 +301,11 @@ class AssetStockModel {
 
       projectName: projectName,
 
-      status: status,
+      status: status ?? this.status,
+      operationalStatus: operationalStatus ?? this.operationalStatus,
+      conditionRevision: conditionRevision ?? this.conditionRevision,
+      hasPendingConditionChange:
+          hasPendingConditionChange ?? this.hasPendingConditionChange,
 
       brand: brand,
 

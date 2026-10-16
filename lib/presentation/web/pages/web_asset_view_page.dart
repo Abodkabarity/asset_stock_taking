@@ -241,7 +241,8 @@ class _TopCard extends StatelessWidget {
         ('Category', asset.category),
         ('Sub Category', asset.subCategory),
         ('Asset Type', asset.assetClassification),
-        ('Status', asset.status),
+        ('Condition', asset.status),
+        ('Availability', asset.operationalStatus),
       ],
     );
   }
@@ -261,6 +262,7 @@ class _MoreActionsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
+      enabled: asset.isAvailable,
       onSelected: (value) async {
         switch (value) {
           case 'move':
@@ -277,9 +279,11 @@ class _MoreActionsButton extends StatelessWidget {
         }
       },
       itemBuilder: (context) => [
-        const PopupMenuItem(value: 'dispose', child: Text('Dispose')),
-        const PopupMenuItem(value: 'maintenance', child: Text('Maintenance')),
-        if (asset.status.trim().toLowerCase() != 'reserved')
+        if (asset.isAvailable) ...[
+          const PopupMenuItem(value: 'dispose', child: Text('Dispose')),
+          const PopupMenuItem(value: 'maintenance', child: Text('Maintenance')),
+        ],
+        if (asset.isAvailable)
           const PopupMenuItem(value: 'move', child: Text('Move / Transfer')),
       ],
       child: Container(
@@ -306,16 +310,24 @@ class _MoreActionsButton extends StatelessWidget {
     String status,
   ) async {
     final repository = WebAssetRepository();
-    await repository.updateStatus(itemCode: asset.itemCode, status: status);
+    await repository.updateOperationalStatus(
+      itemCode: asset.itemCode,
+      operationalStatus: status,
+    );
     await repository.addActivityLog(
       itemCode: asset.itemCode,
       action: status.toLowerCase() == 'maintenance'
           ? 'maintenance_status'
           : 'dispose_status',
-      description: 'Status changed from ${asset.status} to $status',
+      description:
+          'Availability changed from ${asset.operationalStatus} to $status',
       fromBranch: asset.location,
       toBranch: asset.location,
-      metadata: {'previous_status': asset.status, 'status': status},
+      metadata: {
+        'previous_operational_status': asset.operationalStatus,
+        'operational_status': status,
+        'condition': asset.status,
+      },
     );
 
     if (!context.mounted) return;
@@ -328,11 +340,11 @@ class _MoreActionsButton extends StatelessWidget {
     BuildContext context,
     AssetStockModel asset,
   ) async {
-    if (asset.status.trim().toLowerCase() == 'reserved') {
+    if (!asset.isAvailable) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'This asset is reserved. Use Reserve > Transfer or Unreserve first.',
+            'This asset is ${asset.operationalStatus}. Complete its current operation first.',
           ),
         ),
       );
@@ -620,7 +632,8 @@ class _DetailsTab extends StatelessWidget {
                 rows: [
                   ('Date Created', _dateTime(asset.createdAt)),
                   ('Current Branch', asset.location),
-                  ('Status', asset.status),
+                  ('Condition', asset.status),
+                  ('Availability', asset.operationalStatus),
                 ],
               ),
             ),
@@ -701,14 +714,15 @@ class _MaintenanceTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final inMaintenance = asset.status.toLowerCase() == 'maintenance';
+    final inMaintenance = asset.isInMaintenance;
     return WebAssetInfoTable(
       rows: [
         (
           'Maintenance Status',
           inMaintenance ? 'Under maintenance' : 'No active maintenance',
         ),
-        ('Current Status', asset.status),
+        ('Condition', asset.status),
+        ('Availability', asset.operationalStatus),
         ('Last Known Date', _dateTime(asset.createdAt)),
       ],
     );

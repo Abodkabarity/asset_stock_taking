@@ -20,7 +20,10 @@ class _AssetRegistryTableHeader extends StatelessWidget {
           SizedBox(width: 76, child: _AssetRegistryHeaderText('Photo')),
           Expanded(flex: 2, child: _AssetRegistryHeaderText('Asset Tag ID')),
           Expanded(flex: 3, child: _AssetRegistryHeaderText('Asset Details')),
-          Expanded(flex: 2, child: _AssetRegistryHeaderText('Status')),
+          Expanded(
+            flex: 2,
+            child: _AssetRegistryHeaderText('Condition / Availability'),
+          ),
           Expanded(flex: 2, child: _AssetRegistryHeaderText('Location')),
           SizedBox(
             width: 188,
@@ -242,7 +245,7 @@ class _AssetRegistryRowState extends State<_AssetRegistryRow> {
 
                           Expanded(
                             flex: 2,
-                            child: _StatusPill(status: asset.status),
+                            child: AssetStateBadges(asset: asset),
                           ),
 
                           Expanded(
@@ -292,21 +295,28 @@ class _AssetRegistryRowState extends State<_AssetRegistryRow> {
                                   tooltip: 'Transfer asset',
                                   icon: Icons.swap_horiz_rounded,
                                   color: const Color(0xff4263eb),
-                                  onTap: widget.onTransfer,
+                                  onTap: asset.isAvailable
+                                      ? widget.onTransfer
+                                      : null,
                                 ),
                                 const SizedBox(width: 6),
                                 _AssetRegistryActionButton(
                                   tooltip: 'Add maintenance',
                                   icon: Icons.build_circle_outlined,
                                   color: const Color(0xffe58b00),
-                                  onTap: widget.onMaintenance,
+                                  onTap:
+                                      asset.isAvailable || asset.isInMaintenance
+                                      ? widget.onMaintenance
+                                      : null,
                                 ),
                                 const SizedBox(width: 6),
                                 _AssetRegistryActionButton(
                                   tooltip: 'Dispose asset',
                                   icon: Icons.delete_outline_rounded,
                                   color: const Color(0xffd9485f),
-                                  onTap: widget.onDispose,
+                                  onTap: asset.isAvailable || asset.isDisposed
+                                      ? widget.onDispose
+                                      : null,
                                 ),
                               ],
                             ),
@@ -329,7 +339,7 @@ class _AssetRegistryActionButton extends StatefulWidget {
   final String tooltip;
   final IconData icon;
   final Color color;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _AssetRegistryActionButton({
     required this.tooltip,
@@ -352,7 +362,9 @@ class _AssetRegistryActionButtonState
     return Tooltip(
       message: widget.tooltip,
       child: MouseRegion(
-        cursor: SystemMouseCursors.click,
+        cursor: widget.onTap == null
+            ? SystemMouseCursors.basic
+            : SystemMouseCursors.click,
         onEnter: (_) => setState(() => hovered = true),
         onExit: (_) => setState(() => hovered = false),
         child: TweenAnimationBuilder<double>(
@@ -392,7 +404,13 @@ class _AssetRegistryActionButtonState
                           ),
                         ],
                       ),
-                      child: Icon(widget.icon, size: 18, color: widget.color),
+                      child: Icon(
+                        widget.icon,
+                        size: 18,
+                        color: widget.onTap == null
+                            ? AppColors.subText.withValues(alpha: .4)
+                            : widget.color,
+                      ),
                     ),
                   ),
                 ),

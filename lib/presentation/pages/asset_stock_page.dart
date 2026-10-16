@@ -625,7 +625,8 @@ class _AssetStockPageState extends State<AssetStockPage> {
                   e.subCategory.toLowerCase().contains(searchQuery) ||
                   e.classification.toLowerCase().contains(searchQuery) ||
                   e.assetClassification.toLowerCase().contains(searchQuery) ||
-                  e.status.toLowerCase().contains(searchQuery);
+                  e.status.toLowerCase().contains(searchQuery) ||
+                  e.operationalStatus.toLowerCase().contains(searchQuery);
             }).toList();
             return CustomScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,

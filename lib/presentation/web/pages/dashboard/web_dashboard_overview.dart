@@ -19,7 +19,7 @@ extension _DashboardOverviewExtension on _WebAssetDashboardPageState {
               child: _MetricTile(
                 icon: Icons.extension,
                 color: AppColors.primaryColor,
-                title: 'Active Assets',
+                title: 'Available Assets',
                 value: activeCount.toString(),
                 subtitle: 'Total Assets: ${visibleAssets.length}',
               ),
@@ -286,7 +286,11 @@ extension _DashboardOverviewExtension on _WebAssetDashboardPageState {
                                               asset.subCategory,
                                             ),
                                             const _InfoRow('Department', '-'),
-                                            _InfoRow('Status', asset.status),
+                                            _InfoRow('Condition', asset.status),
+                                            _InfoRow(
+                                              'Availability',
+                                              asset.operationalStatus,
+                                            ),
                                           ],
                                         ),
                                       ),
