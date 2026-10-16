@@ -23,6 +23,7 @@ import '../web/utils/web_asset_colors.dart';
 import '../web/utils/web_dropdown_options.dart';
 import '../web/widgets/web_asset_quick_view_dialog.dart';
 import '../web/widgets/web_asset_image.dart';
+import '../web/widgets/transfer/transfer_asset_picker_dialog.dart';
 import '../web/widgets/web_hover_surface.dart';
 import '../web/widgets/common/web_single_date_picker.dart';
 
@@ -1279,10 +1280,10 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
           (locationOptions.isEmpty ? null : locationOptions.first),
     );
 
-    final request = await showDialog<_TransferMoveRequest>(
+    final request = await showDialog<TransferMoveRequest>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _TransferAssetPickerDialog(
+      builder: (context) => TransferAssetPickerDialog(
         assets: availableAssets,
         locations: locationOptions,
         initialLocation: defaultLocation,
