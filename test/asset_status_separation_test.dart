@@ -130,7 +130,7 @@ void main() {
         ),
       );
       expect(find.byTooltip('Condition: Damaged'), findsOneWidget);
-      expect(find.byTooltip('Availability: Maintenance'), findsOneWidget);
+      expect(find.byTooltip('Availability: Under Maintenance'), findsOneWidget);
       expect(find.text('Needs review'), findsOneWidget);
       expect(find.text('Disposed'), findsOneWidget);
       expect(tester.takeException(), isNull);

@@ -4,7 +4,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
-import '../../../core/utils/asset_status.dart';
+import '../../../core/services/asset_status_catalog.dart';
+import '../../../data/models/asset_status_option.dart';
+import '../../widgets/asset_status_selector.dart';
 import '../../widgets/asset_state_badges.dart';
 import '../../../data/models/asset_stock_model.dart';
 import '../data/web_asset_repository.dart';
@@ -46,6 +48,10 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
   late final TextEditingController warrantyEndDateController;
   late final TextEditingController warrantySerialController;
   late String status;
+  late String physicalCondition;
+  List<AssetStatusOption> statusOptions = AssetStatusCatalog.options.value;
+  bool statusesLoading = true;
+  String? statusesError;
   late bool hasWarranty;
   String? assetImageUrl;
   String? warrantyImageUrl;
@@ -82,9 +88,43 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
       text: widget.asset.warrantySerialNo,
     );
     status = widget.asset.status;
+    physicalCondition = widget.asset.status;
     hasWarranty = widget.asset.hasWarranty;
     assetImageUrl = widget.asset.imagePath;
     warrantyImageUrl = widget.asset.warrantyImagePath;
+    _loadStatuses();
+  }
+
+  Future<void> _loadStatuses() async {
+    try {
+      final rows = await repository.getStatusOptions();
+      if (mounted) {
+        setState(() {
+          statusOptions = rows;
+          statusesLoading = false;
+          statusesError = null;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          statusesLoading = false;
+          statusesError = 'Could not load statuses. Please refresh the page.';
+        });
+      }
+    }
+  }
+
+  AssetStatusSelection get _selectedStatus {
+    final option = statusOptions
+        .where((option) => option.value == status)
+        .firstOrNull;
+    return (option ??
+            AssetStatusOption(value: status, label: status, kind: 'condition'))
+        .select(
+          condition: physicalCondition,
+          operation: widget.asset.operationalStatus,
+        );
   }
 
   @override
@@ -125,6 +165,28 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
   }
 
   Future<void> _save() async {
+    setState(() => saving = true);
+    try {
+      statusOptions = await repository.getStatusOptions();
+      if (status != widget.asset.status &&
+          !statusOptions.any(
+            (option) => option.isActive && option.value == status,
+          )) {
+        throw StateError('This status was removed. Choose another status.');
+      }
+      await _performSave();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not save asset: $error')));
+      }
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> _performSave() async {
     setState(() {
       saving = true;
     });
@@ -164,15 +226,18 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
     await repository.updateAsset(
       itemCode: widget.asset.itemCode,
       expectedConditionRevision: widget.asset.conditionRevision,
+      expectedOperationalStatus: widget.asset.operationalStatus,
       values: {
         'brand': brandController.text,
         'model': modelController.text,
         'serial_no': serialController.text,
         'cost': cost,
-        'status': status,
+        'status': _selectedStatus.condition,
+        if (_selectedStatus.operation != widget.asset.operationalStatus)
+          'operational_status': _selectedStatus.operation,
         'condition_revision':
             widget.asset.conditionRevision +
-            (status == widget.asset.status ? 0 : 1),
+            (_selectedStatus.condition == widget.asset.status ? 0 : 1),
         'description': descriptionController.text,
         'image_path': nextAssetImageUrl,
         'has_warranty': hasWarranty,
@@ -197,7 +262,8 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
       toBranch: widget.asset.location,
       metadata: {
         'previous_status': widget.asset.status,
-        'status': status,
+        'status': _selectedStatus.condition,
+        'operational_status': _selectedStatus.operation,
         'name': nameController.text,
         'brand': brandController.text,
         'model': modelController.text,
@@ -224,25 +290,6 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
     } else {
       Navigator.pop(context);
     }
-  }
-
-  List<String> get _statusOptions {
-    const standardStatuses = AssetStatus.conditions;
-    final uniqueStatuses = <String, String>{};
-    for (final option in standardStatuses) {
-      uniqueStatuses[option.toLowerCase()] = option;
-    }
-
-    final currentStatus = status.trim();
-    if (currentStatus.isNotEmpty) {
-      // Keep the exact value stored on the asset so DropdownButton always has
-      // exactly one matching item, even for legacy or operational statuses.
-      uniqueStatuses[currentStatus.toLowerCase()] = currentStatus;
-    }
-
-    final options = uniqueStatuses.values.toList(growable: false);
-    options.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    return options;
   }
 
   @override
@@ -283,7 +330,10 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
                     ),
                     const SizedBox(width: 10),
                     ElevatedButton(
-                      onPressed: saving ? null : _save,
+                      onPressed:
+                          saving || statusesLoading || statusesError != null
+                          ? null
+                          : _save,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryColor,
                         foregroundColor: Colors.white,
@@ -373,27 +423,32 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
                                 ),
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 14),
-                                  child: DropdownButtonFormField<String>(
-                                    key: ValueKey('edit-status-$status'),
-                                    initialValue: status,
-                                    decoration: _decoration(
-                                      'Physical condition',
-                                    ),
-                                    items: _statusOptions
-                                        .map(
-                                          (option) => DropdownMenuItem<String>(
-                                            value: option,
-                                            child: Text(option),
-                                          ),
-                                        )
-                                        .toList(growable: false),
-                                    onChanged: (value) {
-                                      if (value == null) return;
-                                      setState(() {
-                                        status = value;
-                                      });
-                                    },
-                                  ),
+                                  child: statusesError != null
+                                      ? Text(statusesError!)
+                                      : AssetStatusSelector(
+                                          value: status,
+                                          condition: physicalCondition,
+                                          currentOperation:
+                                              widget.asset.operationalStatus,
+                                          options: statusOptions,
+                                          enabled: !saving && !statusesLoading,
+                                          onChanged: (value) => setState(() {
+                                            status = value;
+                                            final option = statusOptions
+                                                .where(
+                                                  (option) =>
+                                                      option.value == value,
+                                                )
+                                                .firstOrNull;
+                                            if (option?.isOperation != true) {
+                                              physicalCondition = value;
+                                            }
+                                          }),
+                                          onConditionChanged: (value) =>
+                                              setState(
+                                                () => physicalCondition = value,
+                                              ),
+                                        ),
                                 ),
                               ],
                             ),

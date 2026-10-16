@@ -13,6 +13,8 @@ import '../../core/services/transfer_excel_service.dart';
 import '../../core/services/barcode_print_service.dart';
 import '../../core/utils/asset_classification_utils.dart';
 import '../../core/utils/asset_status.dart';
+import '../../core/services/asset_status_catalog.dart';
+import '../web/pages/setup/web_status_setup_page.dart';
 import '../widgets/asset_state_badges.dart';
 import '../../data/models/asset_stock_model.dart';
 import '../web/data/web_asset_repository.dart';
@@ -81,6 +83,7 @@ enum WebAssetSection {
   setupClassifications,
   setupCategories,
   setupSubCategories,
+  setupStatuses,
 }
 
 enum WebAlertView {
@@ -224,6 +227,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     final masterAssetRowsFuture = webRepository.getMasterAssetRows();
     final branchRowsFuture = webRepository.getBranchRows();
     final setupOptionRowsFuture = webRepository.getSetupOptionRows();
+    final statusOptionsFuture = webRepository.getStatusOptions();
 
     final loadedAlerts = await alertsFuture;
     final loadedRecords = await recordsFuture;
@@ -235,6 +239,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
     final loadedMasterAssetRows = await masterAssetRowsFuture;
     final loadedBranchRows = await branchRowsFuture;
     final loadedSetupOptionRows = await setupOptionRowsFuture;
+    await statusOptionsFuture;
 
     if (!mounted) return;
     setState(() {
@@ -461,6 +466,10 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
         asset.brand.toLowerCase().contains(search) ||
         asset.status.toLowerCase().contains(search) ||
         asset.operationalStatus.toLowerCase().contains(search) ||
+        AssetStatusCatalog.label(asset.status).toLowerCase().contains(search) ||
+        AssetStatusCatalog.label(
+          asset.operationalStatus,
+        ).toLowerCase().contains(search) ||
         asset.location.toLowerCase().contains(search) ||
         asset.assetInventory.toLowerCase().contains(search);
   }
@@ -1578,7 +1587,9 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                                 children: [
                                   _DialogInfo(
                                     label: 'Physical condition',
-                                    value: asset.status,
+                                    value: AssetStatusCatalog.label(
+                                      asset.status,
+                                    ),
                                   ),
                                   _DialogInfo(
                                     label: 'Location',
@@ -1981,6 +1992,8 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
         return 'Categories';
       case WebAssetSection.setupSubCategories:
         return 'Sub Categories';
+      case WebAssetSection.setupStatuses:
+        return 'Statuses';
     }
   }
 
@@ -2054,6 +2067,8 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
         return _reservePanel();
       case WebAssetSection.setupAssets:
         return _setupAssetsPanel();
+      case WebAssetSection.setupStatuses:
+        return WebStatusSetupPage(repository: webRepository);
       case WebAssetSection.setupBranches:
         return _setupBranchesPanel();
       case WebAssetSection.setupClassifications:
@@ -2198,7 +2213,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
                               children: [
                                 _DialogInfo(
                                   label: 'Physical condition',
-                                  value: asset.status,
+                                  value: AssetStatusCatalog.label(asset.status),
                                 ),
                                 _DialogInfo(
                                   label: 'Location',

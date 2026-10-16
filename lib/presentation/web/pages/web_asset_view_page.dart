@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/asset_status_catalog.dart';
 import '../../../core/services/barcode_print_service.dart';
 import '../../../core/utils/asset_classification_utils.dart';
 import '../../../data/models/asset_stock_model.dart';
@@ -241,8 +242,8 @@ class _TopCard extends StatelessWidget {
         ('Category', asset.category),
         ('Sub Category', asset.subCategory),
         ('Asset Type', asset.assetClassification),
-        ('Condition', asset.status),
-        ('Availability', asset.operationalStatus),
+        ('Condition', AssetStatusCatalog.label(asset.status)),
+        ('Availability', AssetStatusCatalog.label(asset.operationalStatus)),
       ],
     );
   }
@@ -632,8 +633,11 @@ class _DetailsTab extends StatelessWidget {
                 rows: [
                   ('Date Created', _dateTime(asset.createdAt)),
                   ('Current Branch', asset.location),
-                  ('Condition', asset.status),
-                  ('Availability', asset.operationalStatus),
+                  ('Condition', AssetStatusCatalog.label(asset.status)),
+                  (
+                    'Availability',
+                    AssetStatusCatalog.label(asset.operationalStatus),
+                  ),
                 ],
               ),
             ),
@@ -721,8 +725,8 @@ class _MaintenanceTab extends StatelessWidget {
           'Maintenance Status',
           inMaintenance ? 'Under maintenance' : 'No active maintenance',
         ),
-        ('Condition', asset.status),
-        ('Availability', asset.operationalStatus),
+        ('Condition', AssetStatusCatalog.label(asset.status)),
+        ('Availability', AssetStatusCatalog.label(asset.operationalStatus)),
         ('Last Known Date', _dateTime(asset.createdAt)),
       ],
     );

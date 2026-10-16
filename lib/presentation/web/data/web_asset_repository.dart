@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/utils/asset_status.dart';
+import '../../../core/services/asset_status_catalog.dart';
+import '../../../data/models/asset_status_option.dart';
 import '../../../data/models/asset_item_model.dart';
 import '../../../data/models/asset_stock_model.dart';
 import '../auth/web_auth_session.dart';
@@ -134,6 +136,93 @@ class WebAssetRepository {
     } catch (_) {
       return const [];
     }
+  }
+
+  Future<List<AssetStatusOption>> getStatusOptions() async {
+    final rows = await supabase
+        .from('asset_status_options')
+        .select()
+        .order('sort_order')
+        .order('label');
+    final options = rows
+        .map(AssetStatusOption.fromJson)
+        .toList(growable: false);
+    AssetStatusCatalog.options.value = options;
+    return options;
+  }
+
+  Future<void> saveStatusOption({
+    AssetStatusOption? original,
+    required String label,
+    required String kind,
+    String? operation,
+  }) async {
+    final clean = label.trim();
+    if (clean.isEmpty || clean.length > 80) {
+      throw ArgumentError('Enter a status name between 1 and 80 characters.');
+    }
+    if (kind != 'condition' && kind != 'operation') {
+      throw ArgumentError('Choose the status type.');
+    }
+    if (kind == 'condition' && AssetStatus.legacyOperation(clean) != null) {
+      throw ArgumentError('Choose Operational state for this status.');
+    }
+    final value = original?.value ?? (kind == 'operation' ? operation : clean);
+    if (value == null ||
+        (kind == 'operation' && !AssetStatus.operations.contains(value))) {
+      throw ArgumentError('Choose an operational state.');
+    }
+    final existing = await getStatusOptions();
+    if (existing.any(
+      (row) =>
+          row.isActive &&
+          row.value != original?.value &&
+          row.label.toLowerCase() == clean.toLowerCase(),
+    )) {
+      throw StateError('A status with this name already exists.');
+    }
+    final sameValue = existing
+        .where((row) => row.value.toLowerCase() == value.toLowerCase())
+        .firstOrNull;
+    if (original == null && sameValue?.isActive == true) {
+      throw StateError('This status already exists. Edit its name instead.');
+    }
+    if (original != null || sameValue != null) {
+      final updated = await supabase
+          .from('asset_status_options')
+          .update({
+            'label': clean,
+            'is_active': true,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('value', original?.value ?? sameValue!.value)
+          .select('value');
+      if (updated.isEmpty) throw StateError('The status could not be saved.');
+    } else {
+      await supabase.from('asset_status_options').insert({
+        'value': value,
+        'label': clean,
+        'kind': kind,
+        'sort_order':
+            existing.fold<int>(
+              0,
+              (max, row) => row.sortOrder > max ? row.sortOrder : max,
+            ) +
+            1,
+      });
+    }
+  }
+
+  Future<void> setStatusOptionActive(String value, bool active) async {
+    final updated = await supabase
+        .from('asset_status_options')
+        .update({
+          'is_active': active,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('value', value)
+        .select('value');
+    if (updated.isEmpty) throw StateError('The status could not be updated.');
   }
 
   Future<void> addSetupOption({
@@ -325,25 +414,30 @@ class WebAssetRepository {
       throw ArgumentError.value(quantity, 'quantity', 'Must be from 1 to 500');
     }
 
-    try {
-      final response = await supabase.rpc(
-        'create_asset_stock_batch',
-        params: {
-          'p_asset_code': assetCode,
-          'p_quantity': quantity,
-          'p_template': template,
-        },
-      );
-      return (response as List)
-          .map((row) => (row as Map)['item_code']?.toString() ?? '')
-          .where((code) => code.isNotEmpty)
-          .toList(growable: false);
-    } on PostgrestException catch (error) {
-      final missingFunction =
-          error.code == 'PGRST202' ||
-          error.code == '42883' ||
-          error.message.toLowerCase().contains('create_asset_stock_batch');
-      if (!missingFunction) rethrow;
+    // Older batch RPCs omit operational_status from their INSERT columns.
+    // A workflow selection uses the atomic row insert below to preserve it.
+    if (template['operational_status'] == null ||
+        template['operational_status'] == AssetStatus.available) {
+      try {
+        final response = await supabase.rpc(
+          'create_asset_stock_batch',
+          params: {
+            'p_asset_code': assetCode,
+            'p_quantity': quantity,
+            'p_template': template,
+          },
+        );
+        return (response as List)
+            .map((row) => (row as Map)['item_code']?.toString() ?? '')
+            .where((code) => code.isNotEmpty)
+            .toList(growable: false);
+      } on PostgrestException catch (error) {
+        final missingFunction =
+            error.code == 'PGRST202' ||
+            error.code == '42883' ||
+            error.message.toLowerCase().contains('create_asset_stock_batch');
+        if (!missingFunction) rethrow;
+      }
     }
 
     // Backward-compatible path. A unique item_code constraint protects this
@@ -564,6 +658,7 @@ class WebAssetRepository {
     required String itemCode,
     required Map<String, dynamic> values,
     int? expectedConditionRevision,
+    String? expectedOperationalStatus,
   }) async {
     if (values.containsKey('status') &&
         (expectedConditionRevision == null ||
@@ -579,6 +674,16 @@ class WebAssetRepository {
         .eq('item_code', itemCode);
     if (expectedConditionRevision != null) {
       request = request.eq('condition_revision', expectedConditionRevision);
+    }
+    if (values.containsKey('operational_status')) {
+      if (expectedOperationalStatus == null ||
+          (expectedOperationalStatus != AssetStatus.available &&
+              expectedOperationalStatus != values['operational_status'])) {
+        throw StateError(
+          'Complete the current operation before choosing another operational status.',
+        );
+      }
+      request = request.eq('operational_status', expectedOperationalStatus);
     }
     final updated = await request.select('item_code');
     if (updated.isEmpty) {

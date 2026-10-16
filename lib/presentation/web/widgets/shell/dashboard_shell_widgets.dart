@@ -199,6 +199,8 @@ class _TopBar extends StatelessWidget {
         return 'Categories';
       case WebAssetSection.setupSubCategories:
         return 'Sub Categories';
+      case WebAssetSection.setupStatuses:
+        return 'Statuses';
     }
   }
 
@@ -234,6 +236,8 @@ class _TopBar extends StatelessWidget {
         return 'Manage master asset categories';
       case WebAssetSection.setupSubCategories:
         return 'Manage master asset sub categories';
+      case WebAssetSection.setupStatuses:
+        return 'Manage asset status options';
     }
   }
 }
@@ -1152,7 +1156,8 @@ class _SetupSidebarGroupState extends State<_SetupSidebarGroup> {
       section == WebAssetSection.setupBranches ||
       section == WebAssetSection.setupClassifications ||
       section == WebAssetSection.setupCategories ||
-      section == WebAssetSection.setupSubCategories;
+      section == WebAssetSection.setupSubCategories ||
+      section == WebAssetSection.setupStatuses;
 
   @override
   void initState() {
@@ -1238,6 +1243,14 @@ class _SetupSidebarGroupState extends State<_SetupSidebarGroup> {
                         onTap: () => widget.onSelected(
                           WebAssetSection.setupSubCategories,
                         ),
+                      ),
+                      _SidebarSubItem(
+                        icon: Icons.fact_check_outlined,
+                        label: 'Statuses',
+                        selected:
+                            widget.selected == WebAssetSection.setupStatuses,
+                        onTap: () =>
+                            widget.onSelected(WebAssetSection.setupStatuses),
                       ),
                     ],
                   )

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/services/asset_status_catalog.dart';
 import '../../core/utils/asset_status.dart';
 import '../../data/models/asset_stock_model.dart';
 
@@ -24,26 +25,31 @@ class AssetStateBadges extends StatelessWidget {
       AssetStatus.checkedOut => const Color(0xff2c6ebc),
       _ => AppColors.subText,
     };
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _badge(
-          'Condition',
-          asset.needsConditionReview ? 'Needs review' : asset.status,
-          Icons.verified_outlined,
-          conditionColor,
-        ),
-        if (!asset.isAvailable) ...[
-          const SizedBox(height: 5),
+    return ValueListenableBuilder(
+      valueListenable: AssetStatusCatalog.options,
+      builder: (context, options, _) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           _badge(
-            'Availability',
-            asset.operationalStatus,
-            Icons.work_outline_rounded,
-            operationColor,
+            'Condition',
+            asset.needsConditionReview
+                ? 'Needs review'
+                : AssetStatusCatalog.label(asset.status),
+            Icons.verified_outlined,
+            conditionColor,
           ),
+          if (!asset.isAvailable) ...[
+            const SizedBox(height: 5),
+            _badge(
+              'Availability',
+              AssetStatusCatalog.label(asset.operationalStatus),
+              Icons.work_outline_rounded,
+              operationColor,
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 

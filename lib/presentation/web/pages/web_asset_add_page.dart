@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../data/models/asset_status_option.dart';
+import '../../widgets/asset_status_selector.dart';
 import '../../../data/models/asset_item_model.dart';
 import '../data/web_asset_repository.dart';
 import '../utils/web_dropdown_options.dart';
@@ -54,6 +56,8 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
   AssetItemModel? selectedItem;
   String? branch;
   String status = 'New';
+  String physicalCondition = 'New';
+  List<AssetStatusOption> statusOptions = [];
   bool hasWarranty = false;
   bool loading = true;
   bool saving = false;
@@ -90,6 +94,7 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
   Future<void> _load() async {
     final loadedBranches = await repository.getBranches();
     final loadedItems = await repository.getMasterItems();
+    final loadedStatuses = await repository.getStatusOptions();
     final sortedBranches = alphabetizedWebOptions([
       'Asset Store',
       ...loadedBranches,
@@ -100,6 +105,16 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
 
     setState(() {
       branches = sortedBranches;
+      statusOptions = loadedStatuses;
+      final active = loadedStatuses.where((option) => option.isActive).toList();
+      final conditions = active.where((option) => !option.isOperation).toList();
+      if (!conditions.any((option) => option.value == physicalCondition)) {
+        physicalCondition = conditions.firstOrNull?.value ?? 'Unknown';
+      }
+      if (active.isNotEmpty &&
+          !active.any((option) => option.value == status)) {
+        status = active.first.value;
+      }
       masterItems =
           loadedItems.where((item) {
             final type = item.assetInventory.trim().toLowerCase();
@@ -192,6 +207,14 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
     setState(() => saving = true);
 
     try {
+      final latestStatuses = await repository.getStatusOptions();
+      final selected = latestStatuses
+          .where((option) => option.isActive && option.value == status)
+          .firstOrNull;
+      if (selected == null) {
+        throw StateError('Add an active status in Setup before saving.');
+      }
+      final selection = selected.select(condition: physicalCondition);
       String? imageUrl;
       String? warrantyImageUrl;
 
@@ -231,7 +254,8 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
           'asset_inventory': item.assetInventory,
           'location': targetBranch,
           'project_name': '',
-          'status': status,
+          'status': selection.condition,
+          'operational_status': selection.operation,
           'brand': brandController.text,
           'model': modelController.text,
           'serial_no': serialController.text,
@@ -267,7 +291,8 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
           'name': descriptionController.text.trim().isEmpty
               ? item.name
               : descriptionController.text.trim(),
-          'status': status,
+          'status': selection.condition,
+          'operational_status': selection.operation,
         },
       );
 
@@ -583,30 +608,37 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
                                             label: 'Serial No',
                                             controller: serialController,
                                           ),
-                                          DropdownButtonFormField<String>(
-                                            initialValue: status,
-                                            decoration: _decoration('Physical condition'),
-                                            items: const [
-                                              DropdownMenuItem(
-                                                value: 'Bad',
-                                                child: Text('Bad'),
-                                              ),
-                                              DropdownMenuItem(
-                                                value: 'Good',
-                                                child: Text('Good'),
-                                              ),
-                                              DropdownMenuItem(
-                                                value: 'New',
-                                                child: Text('New'),
-                                              ),
-                                            ],
-                                            onChanged: (value) {
-                                              if (value == null) return;
-                                              setState(() {
-                                                status = value;
-                                              });
-                                            },
-                                          ),
+                                          if (statusOptions.any(
+                                            (option) => option.isActive,
+                                          ))
+                                            AssetStatusSelector(
+                                              value: status,
+                                              condition: physicalCondition,
+                                              options: statusOptions,
+                                              enabled: !saving,
+                                              onChanged: (value) =>
+                                                  setState(() {
+                                                    status = value;
+                                                    final option = statusOptions
+                                                        .firstWhere(
+                                                          (option) =>
+                                                              option.value ==
+                                                              value,
+                                                        );
+                                                    if (!option.isOperation) {
+                                                      physicalCondition = value;
+                                                    }
+                                                  }),
+                                              onConditionChanged: (value) =>
+                                                  setState(
+                                                    () => physicalCondition =
+                                                        value,
+                                                  ),
+                                            )
+                                          else
+                                            const Text(
+                                              'Add a status in Setup → Statuses before adding an asset.',
+                                            ),
                                         ],
                                       ),
                                     ),

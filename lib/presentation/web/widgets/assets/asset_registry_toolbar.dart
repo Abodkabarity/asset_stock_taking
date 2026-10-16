@@ -130,7 +130,7 @@ class _AssetRegistryToolbar extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      status,
+                      AssetStatusCatalog.label(status),
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Color(0xff34435a),
@@ -177,7 +177,10 @@ class _AssetRegistryToolbar extends StatelessWidget {
             child: Text('All availability'),
           ),
           for (final state in AssetStatus.operations)
-            DropdownMenuItem(value: state, child: Text(state)),
+            DropdownMenuItem(
+              value: state,
+              child: Text(AssetStatusCatalog.label(state)),
+            ),
         ],
         onChanged: (value) =>
             onOperationalStatusChanged(value == '__all__' ? null : value),
