@@ -113,51 +113,61 @@ class _WebStatusSetupPageState extends State<WebStatusSetupPage> {
               colors: [Color(0xff102b50), Color(0xff2463a8)],
             ),
           ),
-          child: Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 20,
-            runSpacing: 18,
-            children: [
-              const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.fact_check_outlined,
-                    color: Colors.white,
-                    size: 32,
-                  ),
-                  SizedBox(width: 14),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          child: LayoutBuilder(
+            builder: (context, constraints) => Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 20,
+              runSpacing: 18,
+              children: [
+                SizedBox(
+                  width: constraints.maxWidth > 700
+                      ? constraints.maxWidth - 190
+                      : constraints.maxWidth,
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Statuses',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      Icon(
+                        Icons.fact_check_outlined,
+                        color: Colors.white,
+                        size: 32,
                       ),
-                      SizedBox(height: 6),
-                      Text(
-                        'Manage asset status options',
-                        style: TextStyle(color: Color(0xffd9e8f8)),
+                      SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Statuses',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              'Renaming a status updates its name on all assets using it.\n'
+                              'Deleting a status removes it from the choices. Existing assets keep their status.',
+                              style: TextStyle(color: Color(0xffd9e8f8)),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                ],
-              ),
-              ElevatedButton.icon(
-                onPressed: loading || error != null ? null : () => _edit(),
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Add Status'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xff174b82),
                 ),
-              ),
-            ],
+                ElevatedButton.icon(
+                  onPressed: loading || error != null ? null : () => _edit(),
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Add Status'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xff174b82),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 20),
@@ -190,11 +200,6 @@ class _WebStatusSetupPageState extends State<WebStatusSetupPage> {
                     icon: const Icon(Icons.refresh_rounded),
                   ),
                 ],
-              ),
-              const SizedBox(height: 14),
-              const Text(
-                'Manage the status names used when adding or editing assets. Renaming updates the displayed name; deleting keeps existing assets and history.',
-                style: TextStyle(color: AppColors.subText, fontSize: 12),
               ),
               const SizedBox(height: 18),
               if (loading)
@@ -365,14 +370,6 @@ class _StatusOptionDialogState extends State<_StatusOptionDialog> {
                 enabled: !saving,
                 decoration: const InputDecoration(labelText: 'Status name'),
               ),
-              if (widget.original != null)
-                const Padding(
-                  padding: EdgeInsets.only(top: 14),
-                  child: Text(
-                    'The status meaning stays unchanged for existing assets.',
-                    style: TextStyle(color: AppColors.subText, fontSize: 12),
-                  ),
-                ),
               if (error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 14),
