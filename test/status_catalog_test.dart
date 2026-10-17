@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:asset_stock_taking/core/services/asset_status_catalog.dart';
 import 'package:asset_stock_taking/data/models/asset_status_option.dart';
+import 'package:asset_stock_taking/data/models/asset_stock_model.dart';
 import 'package:asset_stock_taking/presentation/widgets/asset_status_selector.dart';
+import 'package:asset_stock_taking/presentation/widgets/asset_state_badges.dart';
 import 'package:asset_stock_taking/presentation/web/data/web_asset_repository.dart';
 import 'package:asset_stock_taking/presentation/web/pages/setup/web_status_setup_page.dart';
 import 'package:flutter/material.dart';
@@ -23,7 +25,7 @@ void main() {
           (option) => <String, dynamic>{
             'value': option.value,
             'label': option.label,
-            'kind': option.kind,
+            'kind': 'condition',
             'sort_order': option.sortOrder,
             'is_active': option.isActive,
           },
@@ -79,16 +81,25 @@ void main() {
       'Good',
       'Assigned',
     ]);
-    final maintenance = AssetStatusOption.defaults.first.select(
-      condition: 'Damaged',
-    );
-    expect(maintenance.condition, 'Damaged');
-    expect(maintenance.operation, 'Maintenance');
-    final good = AssetStatusOption.defaults
-        .firstWhere((option) => option.value == 'Good')
-        .select(condition: 'Damaged', operation: 'Maintenance');
-    expect(good.condition, 'Good');
-    expect(good.operation, 'Maintenance');
+    for (final option in AssetStatusOption.defaults) {
+      for (final operation in [
+        'Available',
+        'Maintenance',
+        'Checked Out',
+        'Reserved',
+        'Disposed',
+      ]) {
+        final asset = AssetStockModel.fromJson({
+          'status': option.value,
+          'operational_status': operation,
+        });
+        final restored = AssetStockModel.fromJson(
+          asset.toJson(),
+        ).copyWith(isSynced: true);
+        expect(restored.status, option.value);
+        expect(restored.operationalStatus, operation);
+      }
+    }
   });
 
   test(
@@ -97,11 +108,7 @@ void main() {
       final good = (await repository.getStatusOptions()).firstWhere(
         (option) => option.value == 'Good',
       );
-      await repository.saveStatusOption(
-        original: good,
-        label: 'Excellent',
-        kind: 'condition',
-      );
+      await repository.saveStatusOption(original: good, label: 'Excellent');
       await repository.setStatusOptionActive('Good', false);
       final retired = await repository.getStatusOptions();
       expect(
@@ -113,10 +120,7 @@ void main() {
         isFalse,
       );
       expect(AssetStatusCatalog.label('Good'), 'Excellent');
-      await repository.saveStatusOption(
-        label: 'Refurbished',
-        kind: 'condition',
-      );
+      await repository.saveStatusOption(label: 'Refurbished');
       // A new label is a new meaning; the original Good history stays intact.
       expect(
         rows.singleWhere((row) => row['value'] == 'Good')['is_active'],
@@ -130,24 +134,22 @@ void main() {
     },
   );
 
-  test('duplicate names and workflow-as-condition are rejected', () async {
-    await expectLater(
-      repository.saveStatusOption(label: 'good', kind: 'condition'),
-      throwsStateError,
-    );
-    await expectLater(
-      repository.saveStatusOption(label: 'Disposed', kind: 'condition'),
-      throwsArgumentError,
-    );
-    await expectLater(
-      repository.saveStatusOption(
-        label: 'Custom operation',
-        kind: 'operation',
-        operation: 'Undefined',
-      ),
-      throwsArgumentError,
-    );
-  });
+  test(
+    'status names are validated and new names always remain physical',
+    () async {
+      await expectLater(
+        repository.saveStatusOption(label: 'good'),
+        throwsStateError,
+      );
+      await expectLater(
+        repository.saveStatusOption(label: ''),
+        throwsArgumentError,
+      );
+      await repository.saveStatusOption(label: 'Checked Out');
+      final created = rows.singleWhere((row) => row['value'] == 'Checked Out');
+      expect(created['kind'], 'condition');
+    },
+  );
 
   test(
     'batch creation retains the selected workflow and physical condition',
@@ -199,10 +201,9 @@ void main() {
   );
 
   testWidgets(
-    'selector shows configured choices and preserves condition during an operation',
+    'selector uses one physical field even for workflow-like status names',
     (tester) async {
       var selected = 'Good';
-      var condition = 'Good';
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -211,11 +212,8 @@ void main() {
               child: StatefulBuilder(
                 builder: (context, setState) => AssetStatusSelector(
                   value: selected,
-                  condition: condition,
                   options: AssetStatusOption.defaults,
                   onChanged: (value) => setState(() => selected = value),
-                  onConditionChanged: (value) =>
-                      setState(() => condition = value),
                 ),
               ),
             ),
@@ -229,11 +227,33 @@ void main() {
       await tester.tap(find.text('Under Maintenance').last);
       await tester.pumpAndSettle();
       expect(selected, 'Maintenance');
-      expect(condition, 'Good');
-      expect(find.text('Physical condition'), findsOneWidget);
+      expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+      expect(find.text('Physical condition'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('physical label edits never rename workflow availability', (
+    tester,
+  ) async {
+    rows.singleWhere((row) => row['value'] == 'Maintenance')['label'] =
+        'Needs repair';
+    await repository.getStatusOptions();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AssetStateBadges(
+            asset: AssetStockModel.fromJson({
+              'status': 'Maintenance',
+              'operational_status': 'Maintenance',
+            }),
+          ),
+        ),
+      ),
+    );
+    expect(find.byTooltip('Condition: Needs repair'), findsOneWidget);
+    expect(find.byTooltip('Availability: Under Maintenance'), findsOneWidget);
+  });
 
   testWidgets(
     'deleted statuses stay out of new selections and legacy values remain editable',
@@ -245,10 +265,8 @@ void main() {
           home: Scaffold(
             body: AssetStatusSelector(
               value: 'New',
-              condition: 'New',
               options: options,
               onChanged: (_) {},
-              onConditionChanged: (_) {},
             ),
           ),
         ),
@@ -263,10 +281,8 @@ void main() {
           home: Scaffold(
             body: AssetStatusSelector(
               value: 'Very Good',
-              condition: 'Very Good',
               options: options,
               onChanged: (_) {},
-              onConditionChanged: (_) {},
             ),
           ),
         ),

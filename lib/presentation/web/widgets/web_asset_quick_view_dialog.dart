@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/asset_status_catalog.dart';
+import '../../../core/utils/asset_status.dart';
 import '../../../data/models/asset_stock_model.dart';
 import 'web_asset_image.dart';
 import 'web_asset_info_table.dart';
@@ -95,7 +96,7 @@ class WebAssetQuickViewDialog extends StatelessWidget {
                         ('Condition', AssetStatusCatalog.label(asset.status)),
                         (
                           'Availability',
-                          AssetStatusCatalog.label(asset.operationalStatus),
+                          AssetStatus.operationLabel(asset.operationalStatus),
                         ),
                       ],
                     ),

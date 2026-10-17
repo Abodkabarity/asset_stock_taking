@@ -26,11 +26,14 @@ await db.exec(`
   create function public.capture_app_audit() returns trigger
     language plpgsql security definer set search_path='' as $$
     begin insert into public.app_audit_log values(to_jsonb(new)); return new; end; $$;
-  create table public.asset_stock_taking(status text,operational_status text);
-  insert into public.asset_stock_taking values('Good','Maintenance');
+  create table public.asset_stock_taking(status text,operational_status text,condition_revision bigint not null default 0,legacy_status_before_separation text);
+  insert into public.asset_stock_taking(status,operational_status) values('Good','Maintenance');
+  create function public.asset_preserve_physical_condition() returns trigger language plpgsql as $$ begin return new; end $$;
+  create trigger asset_preserve_physical_condition before insert or update on public.asset_stock_taking for each row execute function public.asset_preserve_physical_condition();
 `);
 await db.exec(await readFile(new URL('../supabase/migrations/20261016121018_configurable_asset_status_options.sql', import.meta.url),'utf8'));
 await db.exec(await readFile(new URL('../supabase/migrations/20261016122106_restrict_status_catalog_to_permanent_admins.sql', import.meta.url),'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/20261017064826_simplify_catalog_to_physical_statuses.sql', import.meta.url),'utf8'));
 assert.deepEqual((await db.query('select label from public.asset_status_options order by sort_order')).rows.map(row=>row.label),
   ['Under Maintenance','Damaged','Lost','Disposed','Sold','New','Good','Assigned']);
 await db.exec('set role anon');
@@ -55,7 +58,15 @@ await db.exec("update public.asset_status_options set is_active=false where valu
 assert.equal((await db.query("select count(*)::int n from public.asset_status_options where is_active")).rows[0].n,8);
 assert.equal((await db.query("select label from public.asset_status_options where value='Good'")).rows[0].label,'Excellent');
 await db.exec("update public.asset_status_options set is_active=true where value='Good'; reset role");
-assert.deepEqual((await db.query('select * from public.asset_stock_taking')).rows,[{status:'Good',operational_status:'Maintenance'}]);
+assert.deepEqual((await db.query('select status,operational_status from public.asset_stock_taking')).rows,[{status:'Good',operational_status:'Maintenance'}]);
 assert.ok((await db.query('select count(*)::int n from public.app_audit_log')).rows[0].n>=4);
+assert.equal((await db.query("select count(*)::int n from public.asset_status_options where kind<>'condition'")).rows[0].n,0);
+for (const status of ['Maintenance','Disposed','Sold','Lost','Assigned','Under Maintenance','Reserved']) {
+  await db.query('update public.asset_stock_taking set status=$1,condition_revision=condition_revision+1',[status]);
+  assert.deepEqual((await db.query('select status,operational_status from public.asset_stock_taking')).rows,[{status,operational_status:'Maintenance'}]);
+}
+await assert.rejects(db.exec("update public.asset_stock_taking set status='Good'"),/explicit confirmation/);
+await db.exec("insert into public.asset_stock_taking(status,operational_status) values('Disposed','Available')");
+assert.equal((await db.query("select operational_status from public.asset_stock_taking where status='Disposed'")).rows[0].operational_status,'Available');
 await db.close();
-console.log('Status catalog verified: exact seed choices, public read, admin-only CRUD, immutable meanings, case-insensitive uniqueness, reversible deletion and preserved assets.');
+console.log('Status catalog verified: exact seed choices, public read, admin-only CRUD, immutable meanings, case-insensitive uniqueness, reversible deletion and physical-only names independent of operations.');

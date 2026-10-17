@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/utils/asset_status.dart';
 import '../../../../data/models/asset_status_option.dart';
 import '../../data/web_asset_repository.dart';
 
@@ -194,7 +193,7 @@ class _WebStatusSetupPageState extends State<WebStatusSetupPage> {
               ),
               const SizedBox(height: 14),
               const Text(
-                'Physical conditions and operational states stay separate. Renaming a status updates its displayed name; deleting it keeps existing assets and history.',
+                'Manage the status names used when adding or editing assets. Renaming updates the displayed name; deleting keeps existing assets and history.',
                 style: TextStyle(color: AppColors.subText, fontSize: 12),
               ),
               const SizedBox(height: 18),
@@ -232,9 +231,7 @@ class _WebStatusSetupPageState extends State<WebStatusSetupPage> {
                     child: Row(
                       children: [
                         Icon(
-                          option.isOperation
-                              ? Icons.work_outline_rounded
-                              : Icons.verified_outlined,
+                          Icons.verified_outlined,
                           color: AppColors.primaryColor,
                           size: 21,
                         ),
@@ -248,16 +245,6 @@ class _WebStatusSetupPageState extends State<WebStatusSetupPage> {
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.text,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                option.isOperation
-                                    ? 'Operational state'
-                                    : 'Physical condition',
-                                style: const TextStyle(
-                                  color: AppColors.subText,
-                                  fontSize: 11,
                                 ),
                               ),
                             ],
@@ -321,18 +308,12 @@ class _StatusOptionDialog extends StatefulWidget {
 
 class _StatusOptionDialogState extends State<_StatusOptionDialog> {
   late final TextEditingController name;
-  late String kind;
-  String operation = AssetStatus.maintenance;
   bool saving = false;
   String? error;
   @override
   void initState() {
     super.initState();
     name = TextEditingController(text: widget.original?.label ?? '');
-    kind = widget.original?.kind ?? 'condition';
-    if (widget.original?.isOperation == true) {
-      operation = widget.original!.value;
-    }
   }
 
   @override
@@ -350,8 +331,6 @@ class _StatusOptionDialogState extends State<_StatusOptionDialog> {
       await widget.repository.saveStatusOption(
         original: widget.original,
         label: name.text,
-        kind: kind,
-        operation: operation,
       );
       if (mounted) Navigator.pop(context, true);
     } catch (failure) {
@@ -386,52 +365,6 @@ class _StatusOptionDialogState extends State<_StatusOptionDialog> {
                 enabled: !saving,
                 decoration: const InputDecoration(labelText: 'Status name'),
               ),
-              const SizedBox(height: 14),
-              DropdownButtonFormField<String>(
-                initialValue: kind,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Type'),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'condition',
-                    child: Text('Physical condition'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'operation',
-                    child: Text('Operational state'),
-                  ),
-                ],
-                onChanged: saving || widget.original != null
-                    ? null
-                    : (next) {
-                        if (next != null) setState(() => kind = next);
-                      },
-              ),
-              if (kind == 'operation') ...[
-                const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
-                  initialValue: operation,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Operation'),
-                  items: AssetStatus.operations
-                      .map(
-                        (value) => DropdownMenuItem(
-                          value: value,
-                          child: Text(
-                            value == AssetStatus.maintenance
-                                ? 'Under Maintenance'
-                                : value,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: saving || widget.original != null
-                      ? null
-                      : (next) {
-                          if (next != null) setState(() => operation = next);
-                        },
-                ),
-              ],
               if (widget.original != null)
                 const Padding(
                   padding: EdgeInsets.only(top: 14),

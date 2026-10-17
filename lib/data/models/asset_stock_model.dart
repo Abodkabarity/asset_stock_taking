@@ -120,11 +120,8 @@ class AssetStockModel {
     this.imagePath,
     this.localImagePath,
     required this.cost,
-  }) : status = AssetStatus.condition(status),
-       operationalStatus = AssetStatus.operation(
-         operationalStatus,
-         legacyCondition: status,
-       );
+  }) : status = AssetStatus.condition(status, allowWorkflowNames: true),
+       operationalStatus = AssetStatus.operation(operationalStatus);
 
   /// =========================================================
   /// TO JSON
@@ -170,6 +167,8 @@ class AssetStockModel {
   /// FROM JSON
   /// =========================================================
   factory AssetStockModel.fromJson(Map<String, dynamic> json) {
+    final rawStatus = json['status']?.toString() ?? '';
+    final operation = json['operational_status']?.toString();
     return AssetStockModel(
       id: json['id'],
 
@@ -193,8 +192,14 @@ class AssetStockModel {
 
       projectName: json['project_name']?.toString() ?? '',
 
-      status: json['status']?.toString() ?? '',
-      operationalStatus: json['operational_status']?.toString(),
+      status: AssetStatus.condition(
+        rawStatus,
+        allowWorkflowNames: operation != null,
+      ),
+      operationalStatus: AssetStatus.operation(
+        operation,
+        legacyCondition: rawStatus,
+      ),
       conditionRevision: (json['condition_revision'] as num?)?.toInt() ?? 0,
       hasPendingConditionChange: json['has_pending_condition_change'] == true,
 

@@ -154,24 +154,12 @@ class WebAssetRepository {
   Future<void> saveStatusOption({
     AssetStatusOption? original,
     required String label,
-    required String kind,
-    String? operation,
   }) async {
     final clean = label.trim();
     if (clean.isEmpty || clean.length > 80) {
       throw ArgumentError('Enter a status name between 1 and 80 characters.');
     }
-    if (kind != 'condition' && kind != 'operation') {
-      throw ArgumentError('Choose the status type.');
-    }
-    if (kind == 'condition' && AssetStatus.legacyOperation(clean) != null) {
-      throw ArgumentError('Choose Operational state for this status.');
-    }
-    final value = original?.value ?? (kind == 'operation' ? operation : clean);
-    if (value == null ||
-        (kind == 'operation' && !AssetStatus.operations.contains(value))) {
-      throw ArgumentError('Choose an operational state.');
-    }
+    final value = original?.value ?? clean;
     final existing = await getStatusOptions();
     if (existing.any(
       (row) =>
@@ -202,7 +190,7 @@ class WebAssetRepository {
       await supabase.from('asset_status_options').insert({
         'value': value,
         'label': clean,
-        'kind': kind,
+        'kind': 'condition',
         'sort_order':
             existing.fold<int>(
               0,
@@ -589,8 +577,8 @@ class WebAssetRepository {
     required String condition,
     required int expectedRevision,
   }) async {
-    if (AssetStatus.legacyOperation(condition) != null) {
-      throw ArgumentError('Use operational status for asset workflows');
+    if (condition.trim().isEmpty) {
+      throw ArgumentError('Enter a physical status.');
     }
     final updated = await supabase
         .from('asset_stock_taking')
@@ -662,8 +650,7 @@ class WebAssetRepository {
   }) async {
     if (values.containsKey('status') &&
         (expectedConditionRevision == null ||
-            AssetStatus.legacyOperation(values['status']?.toString() ?? '') !=
-                null)) {
+            (values['status']?.toString().trim().isEmpty ?? true))) {
       throw ArgumentError(
         'An explicit physical condition and its revision are required.',
       );

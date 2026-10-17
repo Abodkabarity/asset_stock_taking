@@ -48,7 +48,6 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
   late final TextEditingController warrantyEndDateController;
   late final TextEditingController warrantySerialController;
   late String status;
-  late String physicalCondition;
   List<AssetStatusOption> statusOptions = AssetStatusCatalog.options.value;
   bool statusesLoading = true;
   String? statusesError;
@@ -88,7 +87,6 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
       text: widget.asset.warrantySerialNo,
     );
     status = widget.asset.status;
-    physicalCondition = widget.asset.status;
     hasWarranty = widget.asset.hasWarranty;
     assetImageUrl = widget.asset.imagePath;
     warrantyImageUrl = widget.asset.warrantyImagePath;
@@ -113,18 +111,6 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
         });
       }
     }
-  }
-
-  AssetStatusSelection get _selectedStatus {
-    final option = statusOptions
-        .where((option) => option.value == status)
-        .firstOrNull;
-    return (option ??
-            AssetStatusOption(value: status, label: status, kind: 'condition'))
-        .select(
-          condition: physicalCondition,
-          operation: widget.asset.operationalStatus,
-        );
   }
 
   @override
@@ -226,18 +212,15 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
     await repository.updateAsset(
       itemCode: widget.asset.itemCode,
       expectedConditionRevision: widget.asset.conditionRevision,
-      expectedOperationalStatus: widget.asset.operationalStatus,
       values: {
         'brand': brandController.text,
         'model': modelController.text,
         'serial_no': serialController.text,
         'cost': cost,
-        'status': _selectedStatus.condition,
-        if (_selectedStatus.operation != widget.asset.operationalStatus)
-          'operational_status': _selectedStatus.operation,
+        'status': status,
         'condition_revision':
             widget.asset.conditionRevision +
-            (_selectedStatus.condition == widget.asset.status ? 0 : 1),
+            (status == widget.asset.status ? 0 : 1),
         'description': descriptionController.text,
         'image_path': nextAssetImageUrl,
         'has_warranty': hasWarranty,
@@ -262,8 +245,8 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
       toBranch: widget.asset.location,
       metadata: {
         'previous_status': widget.asset.status,
-        'status': _selectedStatus.condition,
-        'operational_status': _selectedStatus.operation,
+        'status': status,
+        'operational_status': widget.asset.operationalStatus,
         'name': nameController.text,
         'brand': brandController.text,
         'model': modelController.text,
@@ -427,27 +410,10 @@ class _WebAssetEditPageState extends State<WebAssetEditPage> {
                                       ? Text(statusesError!)
                                       : AssetStatusSelector(
                                           value: status,
-                                          condition: physicalCondition,
-                                          currentOperation:
-                                              widget.asset.operationalStatus,
                                           options: statusOptions,
                                           enabled: !saving && !statusesLoading,
-                                          onChanged: (value) => setState(() {
-                                            status = value;
-                                            final option = statusOptions
-                                                .where(
-                                                  (option) =>
-                                                      option.value == value,
-                                                )
-                                                .firstOrNull;
-                                            if (option?.isOperation != true) {
-                                              physicalCondition = value;
-                                            }
-                                          }),
-                                          onConditionChanged: (value) =>
-                                              setState(
-                                                () => physicalCondition = value,
-                                              ),
+                                          onChanged: (value) =>
+                                              setState(() => status = value),
                                         ),
                                 ),
                               ],

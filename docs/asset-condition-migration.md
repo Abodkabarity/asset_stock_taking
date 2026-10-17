@@ -27,8 +27,9 @@ physical condition to Good. An inspection can explicitly change the condition.
    its feature branch until the database prerequisite is satisfied.
 
 New workflow actions detect a missing `operational_status` column before writing.
-Older clients sending a workflow marker through `status` are translated by the
-database trigger without overwriting the physical condition. Physical changes
+The initial migration translated legacy workflow markers sent through `status`.
+The 2026-10-17 physical-only catalog migration replaces this write bridge: all
+status names are now physical, and workflows must write their independent state. Physical changes
 from older clients are rejected until those clients support condition revisions.
 The upgraded mobile sync omits operational state, preventing stale offline data
 from resetting server workflows. Unknown legacy conditions are not uploaded over

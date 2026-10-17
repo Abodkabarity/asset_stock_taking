@@ -179,7 +179,7 @@ class _AssetRegistryToolbar extends StatelessWidget {
           for (final state in AssetStatus.operations)
             DropdownMenuItem(
               value: state,
-              child: Text(AssetStatusCatalog.label(state)),
+              child: Text(AssetStatus.operationLabel(state)),
             ),
         ],
         onChanged: (value) =>

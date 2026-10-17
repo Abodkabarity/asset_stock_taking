@@ -467,7 +467,7 @@ class _WebAssetDashboardPageState extends State<WebAssetDashboardPage> {
         asset.status.toLowerCase().contains(search) ||
         asset.operationalStatus.toLowerCase().contains(search) ||
         AssetStatusCatalog.label(asset.status).toLowerCase().contains(search) ||
-        AssetStatusCatalog.label(
+        AssetStatus.operationLabel(
           asset.operationalStatus,
         ).toLowerCase().contains(search) ||
         asset.location.toLowerCase().contains(search) ||

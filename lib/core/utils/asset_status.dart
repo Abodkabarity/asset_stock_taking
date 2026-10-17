@@ -51,15 +51,18 @@ class AssetStatus {
     }
   }
 
-  static String condition(String value) {
+  static String condition(String value, {bool allowWorkflowNames = false}) {
     final clean = value.trim();
     if (clean.isEmpty ||
         clean.toLowerCase() == 'unknown' ||
-        legacyOperation(clean) != null) {
+        (!allowWorkflowNames && legacyOperation(clean) != null)) {
       return unknown;
     }
     return clean;
   }
+
+  static String operationLabel(String value) =>
+      value == maintenance ? 'Under Maintenance' : value;
 
   static String operation(String? value, {String legacyCondition = ''}) {
     final clean = value?.trim() ?? '';

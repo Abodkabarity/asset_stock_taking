@@ -23,7 +23,7 @@ void main() {
           (option) => {
             'value': option.value,
             'label': option.label,
-            'kind': option.kind,
+            'kind': 'condition',
             'is_active': true,
             'sort_order': option.sortOrder,
           },
@@ -101,6 +101,16 @@ void main() {
     );
     await capture('setup_statuses');
     tester.view.physicalSize = const Size(900, 740);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byTooltip('Edit Assigned'));
+    await tester.tap(find.byTooltip('Edit Assigned'));
+    await tester.pumpAndSettle();
+    expect(find.text('Type'), findsNothing);
+    expect(find.text('Operation'), findsNothing);
+    await capture('status_edit_dialog');
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(900, 740);
     await tester.pumpWidget(
       frame(
         Column(
@@ -128,10 +138,8 @@ void main() {
               ),
               child: AssetStatusSelector(
                 value: 'New',
-                condition: 'New',
                 options: AssetStatusOption.defaults,
                 onChanged: (_) {},
-                onConditionChanged: (_) {},
               ),
             ),
           ],

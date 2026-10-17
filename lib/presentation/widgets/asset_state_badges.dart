@@ -43,7 +43,7 @@ class AssetStateBadges extends StatelessWidget {
             const SizedBox(height: 5),
             _badge(
               'Availability',
-              AssetStatusCatalog.label(asset.operationalStatus),
+              AssetStatus.operationLabel(asset.operationalStatus),
               Icons.work_outline_rounded,
               operationColor,
             ),

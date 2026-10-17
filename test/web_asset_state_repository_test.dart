@@ -179,12 +179,12 @@ void main() {
   );
 
   test(
-    'condition API rejects operational markers and permits explicit inspection',
+    'condition API accepts physical names independently of workflows',
     () async {
       await expectLater(
         repository.updateCondition(
           itemCode: 'A-001',
-          condition: 'Reserved',
+          condition: '',
           expectedRevision: 0,
         ),
         throwsArgumentError,
@@ -192,11 +192,11 @@ void main() {
       expect(requests, isEmpty);
       await repository.updateCondition(
         itemCode: 'A-001',
-        condition: 'Good',
+        condition: 'Disposed',
         expectedRevision: 0,
       );
       expect(jsonDecode(requests.single.body), {
-        'status': 'Good',
+        'status': 'Disposed',
         'condition_revision': 1,
       });
     },

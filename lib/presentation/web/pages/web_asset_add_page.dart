@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/asset_status.dart';
 import '../../../data/models/asset_status_option.dart';
 import '../../widgets/asset_status_selector.dart';
 import '../../../data/models/asset_item_model.dart';
@@ -56,7 +57,6 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
   AssetItemModel? selectedItem;
   String? branch;
   String status = 'New';
-  String physicalCondition = 'New';
   List<AssetStatusOption> statusOptions = [];
   bool hasWarranty = false;
   bool loading = true;
@@ -107,10 +107,6 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
       branches = sortedBranches;
       statusOptions = loadedStatuses;
       final active = loadedStatuses.where((option) => option.isActive).toList();
-      final conditions = active.where((option) => !option.isOperation).toList();
-      if (!conditions.any((option) => option.value == physicalCondition)) {
-        physicalCondition = conditions.firstOrNull?.value ?? 'Unknown';
-      }
       if (active.isNotEmpty &&
           !active.any((option) => option.value == status)) {
         status = active.first.value;
@@ -214,7 +210,6 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
       if (selected == null) {
         throw StateError('Add an active status in Setup before saving.');
       }
-      final selection = selected.select(condition: physicalCondition);
       String? imageUrl;
       String? warrantyImageUrl;
 
@@ -254,8 +249,8 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
           'asset_inventory': item.assetInventory,
           'location': targetBranch,
           'project_name': '',
-          'status': selection.condition,
-          'operational_status': selection.operation,
+          'status': selected.value,
+          'operational_status': AssetStatus.available,
           'brand': brandController.text,
           'model': modelController.text,
           'serial_no': serialController.text,
@@ -291,8 +286,8 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
           'name': descriptionController.text.trim().isEmpty
               ? item.name
               : descriptionController.text.trim(),
-          'status': selection.condition,
-          'operational_status': selection.operation,
+          'status': selected.value,
+          'operational_status': AssetStatus.available,
         },
       );
 
@@ -613,27 +608,11 @@ class _WebAssetAddPageState extends State<WebAssetAddPage> {
                                           ))
                                             AssetStatusSelector(
                                               value: status,
-                                              condition: physicalCondition,
                                               options: statusOptions,
                                               enabled: !saving,
-                                              onChanged: (value) =>
-                                                  setState(() {
-                                                    status = value;
-                                                    final option = statusOptions
-                                                        .firstWhere(
-                                                          (option) =>
-                                                              option.value ==
-                                                              value,
-                                                        );
-                                                    if (!option.isOperation) {
-                                                      physicalCondition = value;
-                                                    }
-                                                  }),
-                                              onConditionChanged: (value) =>
-                                                  setState(
-                                                    () => physicalCondition =
-                                                        value,
-                                                  ),
+                                              onChanged: (value) => setState(
+                                                () => status = value,
+                                              ),
                                             )
                                           else
                                             const Text(
